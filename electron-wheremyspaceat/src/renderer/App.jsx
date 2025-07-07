@@ -114,6 +114,7 @@ function App() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-6">
       <div className="max-w-7xl mx-auto space-y-6">
+        {/* <Header onNewScan={() => console.log('Nouveau scan')} isScanning={false} /> */}
         <Header onNewScan={handleNewScan} isScanning={isScanning} />
         
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

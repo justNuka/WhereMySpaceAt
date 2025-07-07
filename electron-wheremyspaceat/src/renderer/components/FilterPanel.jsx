@@ -1,3 +1,5 @@
+import React from 'react';
+
 const FilterPanel = ({ onMinSizeChange, minSize, scanData }) => {
   const { Filter, Search, RotateCcw } = window.LucideReact;
   const [minSizeInput, setMinSizeInput] = React.useState('');

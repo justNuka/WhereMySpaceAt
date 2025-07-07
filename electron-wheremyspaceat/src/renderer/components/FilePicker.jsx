@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
+
+const platform = window.electronAPI?.getPlatform?.() || 'win32';
 
 // Icônes SVG intégrées
 const Icons = {
@@ -88,9 +90,9 @@ const FilePicker = ({ onScanStart, isScanning }) => {
   };
 
   const folderOptions = [
-    { path: process.platform === 'win32' ? 'C:\\Users' : '/home', label: 'Dossier utilisateurs', desc: 'Dossiers des utilisateurs système' },
-    { path: process.platform === 'win32' ? 'C:\\Program Files' : '/usr', label: 'Programmes installés', desc: 'Applications et logiciels' },
-    { path: process.platform === 'win32' ? 'C:\\Users\\Public\\Documents' : '/tmp', label: 'Dossier temporaire', desc: 'Fichiers temporaires système' }
+    { path: platform === 'win32' ? 'C:\\Users' : '/home', label: 'Dossier utilisateurs', desc: 'Dossiers des utilisateurs système' },
+    { path: platform === 'win32' ? 'C:\\Program Files' : '/usr', label: 'Programmes installés', desc: 'Applications et logiciels' },
+    { path: platform === 'win32' ? 'C:\\Users\\Public\\Documents' : '/tmp', label: 'Dossier temporaire', desc: 'Fichiers temporaires système' }
   ];
 
   return (

@@ -1,6 +1,7 @@
-const ProgressIndicator = ({ scanStatus, processedFiles, currentPath, logs }) => {
-  const { Loader2, CheckCircle, XCircle, AlertTriangle } = window.LucideReact;
-  
+import React from 'react';
+import { Loader2, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
+
+const ProgressIndicator = ({ scanStatus, processedFiles, currentPath, logs }) => {  
   const getStatusIcon = () => {
     switch (scanStatus) {
       case window.CONSTANTS.SCAN_STATUS.SCANNING:

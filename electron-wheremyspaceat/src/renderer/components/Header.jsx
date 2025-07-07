@@ -1,5 +1,7 @@
+import React from 'react';
+import { RefreshCw, HardDrive, Settings } from "lucide-react";
+
 const Header = ({ onRestartScan, scanStatus, currentPath }) => {
-  const { RefreshCw, HardDrive, Settings } = window.LucideReact;
   
   return (
     <header className="glass-morphism-dark rounded-2xl p-6 mb-6 border border-white/10">

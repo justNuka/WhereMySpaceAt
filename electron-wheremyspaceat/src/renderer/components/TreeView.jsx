@@ -1,3 +1,5 @@
+import React from 'react';
+
 const TreeView = ({ data, minSizeFilter }) => {
   const [expandedItems, setExpandedItems] = React.useState(new Set());
   

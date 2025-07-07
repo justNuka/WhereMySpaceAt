@@ -1,3 +1,5 @@
+import React from 'react';
+
 const SpaceChart = ({ data }) => {
   const canvasRef = React.useRef(null);
   const chartRef = React.useRef(null);

@@ -1,16 +1,18 @@
+import React from 'react';
+import { 
+  ChevronRight, 
+  ChevronDown, 
+  Folder, 
+  FolderOpen, 
+  File, 
+  Archive,
+  Image,
+  Music,
+  Video,
+  Code
+} from 'lucide-react';
+
 const FileItem = ({ item, depth = 0, maxSize, onToggle, isExpanded = false, minSizeFilter }) => {
-  const { 
-    ChevronRight, 
-    ChevronDown, 
-    Folder, 
-    FolderOpen, 
-    File, 
-    Archive,
-    Image,
-    Music,
-    Video,
-    Code
-  } = window.LucideReact;
   
   // Filter by minimum size
   if (minSizeFilter && item.size < minSizeFilter) {

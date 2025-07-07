@@ -1,5 +1,7 @@
+import React from 'react';
+import { Terminal, ChevronDown, ChevronUp, AlertTriangle, Info, CheckCircle, XCircle } from 'lucide-react';
+
 const LogPanel = ({ logs, isOpen, onToggle }) => {
-  const { Terminal, ChevronDown, ChevronUp, AlertTriangle, Info, CheckCircle, XCircle } = window.LucideReact;
   const logContainerRef = React.useRef(null);
   
   React.useEffect(() => {

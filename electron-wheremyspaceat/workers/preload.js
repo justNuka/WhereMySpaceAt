@@ -28,5 +28,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.removeAllListeners('scan-progress');
       ipcRenderer.removeAllListeners('scan-log');
     }
-  }
+  },
+
+  // Get la plateforme
+  getPlateform: () => process.platform,
 });
