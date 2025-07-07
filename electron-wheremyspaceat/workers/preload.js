@@ -31,5 +31,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   // Get la plateforme
-  getPlateform: () => process.platform,
+  getPlatform: () => process.platform,
 });

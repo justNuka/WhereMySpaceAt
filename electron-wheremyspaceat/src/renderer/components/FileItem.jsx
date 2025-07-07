@@ -1,108 +1,109 @@
 import React from 'react';
-import { 
-  ChevronRight, 
-  ChevronDown, 
-  Folder, 
-  FolderOpen, 
-  File, 
-  Archive,
-  Image,
-  Music,
-  Video,
-  Code
-} from 'lucide-react';
+import Icons from './Icons';
 
-const FileItem = ({ item, depth = 0, maxSize, onToggle, isExpanded = false, minSizeFilter }) => {
-  
-  // Filter by minimum size
-  if (minSizeFilter && item.size < minSizeFilter) {
-    return null;
-  }
-  
+// Fonction utilitaire pour les badges de taille (copié de la démo)
+const getSizeBadge = (size, maxSize) => {
+  const ratio = size / maxSize;
+  if (ratio > 0.8) return "bg-red-500/20 text-red-300 border-red-500/30";
+  if (ratio > 0.6) return "bg-orange-500/20 text-orange-300 border-orange-500/30";
+  if (ratio > 0.4) return "bg-yellow-500/20 text-yellow-300 border-yellow-500/30";
+  if (ratio > 0.2) return "bg-blue-500/20 text-blue-300 border-blue-500/30";
+  return "bg-gray-500/20 text-gray-300 border-gray-500/30";
+};
+
+// Fonction utilitaire pour formater la taille
+const formatSize = (bytes) => {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "Ko", "Mo", "Go", "To"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return (
+    parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
+  );
+};
+
+// Fonction utilitaire pour formater le nombre de fichiers
+const formatFileCount = (count) => {
+  if (count === 0) return "0 fichiers";
+  if (count === 1) return "1 fichier";
+  if (count < 1000) return `${count} fichiers`;
+  if (count < 1000000) return `${(count / 1000).toFixed(1)}K fichiers`;
+  return `${(count / 1000000).toFixed(1)}M fichiers`;
+};
+
+const FileItem = ({
+  item,
+  depth = 0,
+  maxSize,
+  onToggle,
+  isExpanded,
+  minSize,
+}) => {
+  if (minSize && item.size < minSize) return null;
+
   const getFileIcon = (fileName, isDirectory) => {
     if (isDirectory) {
-      return isExpanded ? <FolderOpen className="h-4 w-4" /> : <Folder className="h-4 w-4" />;
+      return isExpanded ? <Icons.FolderOpen /> : <Icons.Folder />;
     }
-    
-    const ext = fileName.split('.').pop()?.toLowerCase();
-    
-    if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg', 'webp'].includes(ext)) {
-      return <Image className="h-4 w-4" />;
-    }
-    if (['mp3', 'wav', 'flac', 'aac', 'ogg'].includes(ext)) {
-      return <Music className="h-4 w-4" />;
-    }
-    if (['mp4', 'avi', 'mov', 'wmv', 'flv', 'mkv'].includes(ext)) {
-      return <Video className="h-4 w-4" />;
-    }
-    if (['js', 'jsx', 'ts', 'tsx', 'py', 'java', 'cpp', 'c', 'css', 'html'].includes(ext)) {
-      return <Code className="h-4 w-4" />;
-    }
-    if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) {
-      return <Archive className="h-4 w-4" />;
-    }
-    
-    return <File className="h-4 w-4" />;
+    return <Icons.File />;
   };
-  
-  const sizeColor = window.getSizeColor(item.size, maxSize);
-  const sizeBadgeClass = window.getSizeBadge(item.size, maxSize);
-  
+
+  const sizeBadgeClass = getSizeBadge(item.size, maxSize);
   const hasChildren = item.children && item.children.length > 0;
-  const isDirectory = item.type === window.CONSTANTS.FILE_TYPES.DIRECTORY;
-  
+  const isDirectory = item.type === "directory";
+
   return (
     <div className="select-none">
-      <div 
+      <div
         className={`flex items-center space-x-2 p-2 rounded-lg hover:bg-white/5 
-                   transition-all duration-200 cursor-pointer group
-                   ${depth > 0 ? 'ml-' + (depth * 4) : ''}`}
+               transition-all duration-200 cursor-pointer group file-item`}
+        style={{ marginLeft: depth * 16 }}
         onClick={() => isDirectory && hasChildren && onToggle(item.path)}
       >
-        {/* Expand/Collapse Icon */}
         <div className="w-4 h-4 flex items-center justify-center">
           {isDirectory && hasChildren ? (
             isExpanded ? (
-              <ChevronDown className="h-3 w-3 text-gray-400" />
+              <Icons.ChevronDown />
             ) : (
-              <ChevronRight className="h-3 w-3 text-gray-400" />
+              <Icons.ChevronRight />
             )
           ) : null}
         </div>
-        
-        {/* File/Folder Icon */}
-        <div className={`${isDirectory ? 'text-blue-400' : 'text-gray-400'} group-hover:text-white transition-colors`}>
+
+        <div
+          className={`${
+            isDirectory ? "text-blue-400" : "text-gray-400"
+          } group-hover:text-white transition-colors`}
+        >
           {getFileIcon(item.name, isDirectory)}
         </div>
-        
-        {/* Name */}
+
         <div className="flex-1 min-w-0">
           <p className="text-white font-medium truncate group-hover:text-blue-300 transition-colors">
             {item.name}
           </p>
           {isDirectory && item.fileCount > 0 && (
             <p className="text-xs text-gray-400">
-              {window.formatFileCount(item.fileCount)}
+              {formatFileCount(item.fileCount)}
             </p>
           )}
         </div>
-        
-        {/* Size Badge */}
-        <div className={`px-2 py-1 rounded-md border text-xs font-medium ${sizeBadgeClass}`}>
-          {window.formatSize(item.size)}
+
+        <div
+          className={`px-2 py-1 rounded-md border text-xs font-medium ${sizeBadgeClass}`}
+        >
+          {formatSize(item.size)}
         </div>
-        
-        {/* Large File Indicator */}
+
         {item.size > maxSize * 0.1 && (
           <div className="w-2 h-2 bg-red-400 rounded-full animate-pulse"></div>
         )}
       </div>
-      
-      {/* Children */}
+
       {isExpanded && hasChildren && (
         <div className="ml-4 border-l border-white/10 pl-2">
           {item.children
-            .filter(child => !minSizeFilter || child.size >= minSizeFilter)
+            .filter((child) => !minSize || child.size >= minSize)
             .map((child) => (
               <FileItem
                 key={child.path}
@@ -110,8 +111,8 @@ const FileItem = ({ item, depth = 0, maxSize, onToggle, isExpanded = false, minS
                 depth={depth + 1}
                 maxSize={maxSize}
                 onToggle={onToggle}
-                isExpanded={isExpanded}
-                minSizeFilter={minSizeFilter}
+                isExpanded={false}
+                minSize={minSize}
               />
             ))}
         </div>

@@ -17,12 +17,17 @@ function App() {
   const [showLogs, setShowLogs] = useState(false);
   const [currentScanType, setCurrentScanType] = useState('');
   const [currentSelectedPath, setCurrentSelectedPath] = useState('');
+  const [currentFile, setCurrentFile] = useState('');
+  const [processedFiles, setProcessedFiles] = useState(0);
+  const [scanStats, setScanStats] = useState(null);
 
   useEffect(() => {
     // Configuration des listeners pour les événements de scan
     if (window.electronAPI) {
       window.electronAPI.onScanProgress((data) => {
         setProgress(data.progress || 0);
+        setCurrentFile(data.currentFile || '');
+        setProcessedFiles(data.processed || 0);
         if (data.currentFile) {
           setLogs(prev => [...prev, {
             id: Date.now(),
@@ -55,6 +60,9 @@ function App() {
     setLogs([]);
     setCurrentScanType(scanType);
     setCurrentSelectedPath(targetPath);
+    setCurrentFile('');
+    setProcessedFiles(0);
+    setScanStats(null);
     
     // Log de démarrage
     setLogs([{
@@ -65,14 +73,10 @@ function App() {
     }]);
     
     try {
-      const result = await window.electronAPI.startScan(targetPath, scanType);
-      setScanData(result);
-      setLogs(prev => [...prev, {
-        id: Date.now(),
-        type: 'success',
-        message: `Scan terminé avec succès! ${result.fileCount || 0} fichiers analysés`,
-        timestamp: new Date().toISOString()
-      }]);
+      const response = await window.electronAPI.startScan(targetPath, scanType);
+      setScanData(response.result);
+      setScanStats(response.stats);
+      // Le log de succès sera affiché par le scanner lui-même maintenant
     } catch (error) {
       console.error('Scan failed:', error);
       setLogs(prev => [...prev, {
@@ -109,6 +113,9 @@ function App() {
     setLogs([]);
     setCurrentScanType('');
     setCurrentSelectedPath('');
+    setCurrentFile('');
+    setProcessedFiles(0);
+    setScanStats(null);
   };
 
   return (
@@ -132,6 +139,9 @@ function App() {
               scanType={currentScanType}
               selectedPath={currentSelectedPath}
               onStop={handleStopScan}
+              currentFile={currentFile}
+              processedFiles={processedFiles}
+              scanStats={scanStats}
             />
             
             {scanData && (
@@ -150,7 +160,7 @@ function App() {
             
             <LogPanel 
               logs={logs}
-              isVisible={showLogs}
+              isOpen={showLogs}
               onToggle={() => setShowLogs(!showLogs)}
             />
           </div>

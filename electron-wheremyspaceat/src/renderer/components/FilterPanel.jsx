@@ -1,7 +1,8 @@
 import React from 'react';
+import { Filter, Search, RotateCcw } from 'lucide-react';
 
 const FilterPanel = ({ onMinSizeChange, minSize, scanData }) => {
-  const { Filter, Search, RotateCcw } = window.LucideReact;
+
   const [minSizeInput, setMinSizeInput] = React.useState('');
   const [sizeUnit, setSizeUnit] = React.useState('MB');
   
@@ -78,13 +79,13 @@ const FilterPanel = ({ onMinSizeChange, minSize, scanData }) => {
               step="0.1"
               className="flex-1 px-3 py-2 glass-morphism border border-white/20 rounded-lg 
                        text-white placeholder-gray-400 focus:outline-none focus:border-blue-400
-                       transition-colors"
+                       transition-colors bg-black/20"
             />
             <select
               value={sizeUnit}
               onChange={(e) => setSizeUnit(e.target.value)}
               className="px-3 py-2 glass-morphism border border-white/20 rounded-lg 
-                       text-white focus:outline-none focus:border-blue-400 transition-colors"
+                       text-white focus:outline-none focus:border-blue-400 transition-colors bg-black/20"
             >
               <option value="B">B</option>
               <option value="KB">KB</option>

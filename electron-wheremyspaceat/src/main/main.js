@@ -91,6 +91,41 @@ ipcMain.handle('get-drives', async () => {
         // Drive non accessible
       }
     }
+    
+    // Ajouter des dossiers utilisateur recommandés (plus sûrs que Temp)
+    try {
+      const userHome = os.homedir();
+      drives.push({
+        path: userHome,
+        name: `Dossier utilisateur (${path.basename(userHome)})`,
+        type: 'folder'
+      });
+      
+      // Dossiers communs dans le profil utilisateur
+      const commonFolders = [
+        { folder: 'Documents', name: 'Documents' },
+        { folder: 'Downloads', name: 'Téléchargements' },
+        { folder: 'Pictures', name: 'Images' },
+        { folder: 'Videos', name: 'Vidéos' },
+        { folder: 'Music', name: 'Musique' }
+      ];
+      
+      for (const { folder, name } of commonFolders) {
+        const folderPath = path.join(userHome, folder);
+        try {
+          await fs.access(folderPath);
+          drives.push({
+            path: folderPath,
+            name: `${name}`,
+            type: 'folder'
+          });
+        } catch (e) {
+          // Dossier non accessible ou inexistant
+        }
+      }
+    } catch (e) {
+      // Ignore
+    }
   } else {
     // Unix/Linux/macOS
     drives.push({
@@ -154,7 +189,7 @@ ipcMain.handle('start-scan', async (event, targetPath, scanType) => {
       if (data.type === 'progress') {
         mainWindow.webContents.send('scan-progress', data);
       } else if (data.type === 'complete') {
-        resolve(data.result);
+        resolve({ result: data.result, stats: data.stats });
         scanWorker = null;
       } else if (data.type === 'error') {
         reject(new Error(data.message));

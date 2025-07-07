@@ -3,8 +3,9 @@ const fs = require('fs').promises;
 const path = require('path');
 
 class DirectoryScanner {
-  constructor(rootPath) {
+  constructor(rootPath, scanType) {
     this.rootPath = rootPath;
+    this.scanType = scanType;
     this.totalFiles = 0;
     this.processedFiles = 0;
     this.errors = [];
@@ -14,16 +15,25 @@ class DirectoryScanner {
   async scan() {
     try {
       parentPort.postMessage({
-        type: 'start',
+        type: 'log',
+        level: 'info',
         message: `Starting scan of ${this.rootPath}`,
         timestamp: new Date().toISOString()
       });
 
       const result = await this.scanDirectory(this.rootPath);
       
+      // Log final avec stats réelles
+      parentPort.postMessage({
+        type: 'log',
+        level: 'success',
+        message: `Scan terminé avec succès! ${this.totalFiles} fichiers analysés`,
+        timestamp: new Date().toISOString()
+      });
+      
       parentPort.postMessage({
         type: 'complete',
-        data: result,
+        result: result,
         stats: {
           totalFiles: this.totalFiles,
           errors: this.errors.length,
@@ -35,7 +45,7 @@ class DirectoryScanner {
     } catch (error) {
       parentPort.postMessage({
         type: 'error',
-        error: error.message,
+        message: error.message,
         timestamp: new Date().toISOString()
       });
     }
@@ -83,12 +93,17 @@ class DirectoryScanner {
           
           this.processedFiles++;
           
-          // Send progress update every 100 items
-          if (this.processedFiles % 100 === 0) {
+          // Send progress update every 50 items
+          if (this.processedFiles % 50 === 0) {
+            // Estimation plus réaliste du progrès
+            const estimatedTotal = Math.max(this.totalFiles, this.processedFiles * 2);
+            const progress = Math.min(95, (this.processedFiles / estimatedTotal) * 100);
+            
             parentPort.postMessage({
               type: 'progress',
+              progress: progress,
               processed: this.processedFiles,
-              currentPath: fullPath,
+              currentFile: fullPath,
               timestamp: new Date().toISOString()
             });
           }
@@ -100,9 +115,22 @@ class DirectoryScanner {
             code: error.code
           });
           
+          // Plus user-friendly pour les erreurs de permission
+          let logMessage = `Accès refusé: ${entry.name}`;
+          if (error.code === 'EPERM') {
+            logMessage = `Permissions insuffisantes pour accéder à: ${entry.name}`;
+          } else if (error.code === 'EACCES') {
+            logMessage = `Accès refusé pour: ${entry.name} (permissions système)`;
+          } else if (error.code === 'ENOENT') {
+            logMessage = `Fichier/dossier introuvable: ${entry.name}`;
+          } else {
+            logMessage = `Erreur lors de l'accès à ${entry.name}: ${error.message}`;
+          }
+          
           parentPort.postMessage({
-            type: 'warning',
-            message: `Access denied: ${fullPath} - ${error.message}`,
+            type: 'log',
+            level: 'warning',
+            message: logMessage,
             timestamp: new Date().toISOString()
           });
         }
@@ -118,9 +146,20 @@ class DirectoryScanner {
         code: error.code
       });
       
+      // Messages d'erreur plus clairs
+      let logMessage = `Impossible d'analyser le dossier: ${path.basename(dirPath)}`;
+      if (error.code === 'EPERM' || error.code === 'EACCES') {
+        logMessage = `Permissions insuffisantes pour scanner: ${path.basename(dirPath)}`;
+      } else if (error.code === 'ENOENT') {
+        logMessage = `Dossier introuvable: ${path.basename(dirPath)}`;
+      } else {
+        logMessage = `Erreur lors du scan de ${path.basename(dirPath)}: ${error.message}`;
+      }
+      
       parentPort.postMessage({
-        type: 'error',
-        message: `Failed to scan directory: ${dirPath} - ${error.message}`,
+        type: 'log',
+        level: 'error',
+        message: logMessage,
         timestamp: new Date().toISOString()
       });
     }
@@ -130,5 +169,5 @@ class DirectoryScanner {
 }
 
 // Start scanning
-const scanner = new DirectoryScanner(workerData.dirPath);
+const scanner = new DirectoryScanner(workerData.targetPath, workerData.scanType);
 scanner.scan();
