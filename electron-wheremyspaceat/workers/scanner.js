@@ -7,6 +7,8 @@ class DirectoryScanner {
     this.rootPath = rootPath;
     this.scanType = scanType;
     this.totalFiles = 0;
+    this.totalDirectories = 0;
+    this.totalSize = 0;
     this.processedFiles = 0;
     this.errors = [];
     this.startTime = Date.now();
@@ -23,6 +25,9 @@ class DirectoryScanner {
 
       const result = await this.scanDirectory(this.rootPath);
       
+      // Calculer la taille totale à partir du résultat
+      this.totalSize = result.size;
+      
       // Log final avec stats réelles
       parentPort.postMessage({
         type: 'log',
@@ -36,6 +41,8 @@ class DirectoryScanner {
         result: result,
         stats: {
           totalFiles: this.totalFiles,
+          totalDirectories: this.totalDirectories,
+          totalSize: this.totalSize,
           errors: this.errors.length,
           duration: Date.now() - this.startTime
         },
@@ -84,6 +91,7 @@ class DirectoryScanner {
             item.children.push(childDir);
             item.size += childDir.size;
             item.fileCount += childDir.fileCount;
+            this.totalDirectories++;
           } else if (entry.isFile()) {
             const stats = await fs.stat(fullPath);
             const fileItem = {

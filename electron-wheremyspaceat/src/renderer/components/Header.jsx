@@ -3,7 +3,7 @@ import { Search, Play, Settings } from "lucide-react";
 
 export default function Header({ onNewScan, isScanning }) {
   return (
-    <header className="glass-card border-b border-white/10 px-6 py-4 pt-12 sticky top-0 z-50" style={{ WebkitAppRegion: 'drag' }}>
+    <header className="glass-card border-b border-white/10 px-6 py-4 pt-12 sticky top-0 z-[60]" style={{ WebkitAppRegion: 'drag' }}>
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
           <div className="w-12 h-12 bg-gradient-to-br from-white/20 to-white/10 rounded-xl flex items-center justify-center">

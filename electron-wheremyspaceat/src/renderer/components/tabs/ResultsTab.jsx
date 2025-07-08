@@ -85,8 +85,8 @@ export default function ResultsTab({ scanData, scanStats }) {
               {largestItems.map((item, index) => (
                 <Card key={`${item.path}-${index}`} className="glass-card border-white/10 hover:bg-white/10 transition-all cursor-pointer">
                   <CardContent className="p-4">
-                    <div className="flex items-center space-x-4">
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                    <div className="flex items-start space-x-4">
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
                         item.type === 'directory' ? 'bg-blue-500/20' : 'bg-green-500/20'
                       }`}>
                         {item.type === 'directory' ? (
@@ -95,11 +95,11 @@ export default function ResultsTab({ scanData, scanStats }) {
                           <FileText className="w-5 h-5 text-green-400" />
                         )}
                       </div>
-                      <div className="flex-1">
-                        <h4 className="text-white font-medium">{item.name}</h4>
-                        <p className="text-sm text-gray-400 truncate">{item.path}</p>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-white font-medium break-words">{item.name}</h4>
+                        <p className="text-sm text-gray-400 break-all">{item.path}</p>
                       </div>
-                      <div className="text-right">
+                      <div className="text-right flex-shrink-0 ml-4">
                         <p className="text-white font-semibold">{formatSize(item.size)}</p>
                         {item.type === 'directory' && item.fileCount && (
                           <p className="text-sm text-gray-400">{formatFileCount(item.fileCount)}</p>

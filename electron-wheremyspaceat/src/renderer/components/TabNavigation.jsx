@@ -18,7 +18,7 @@ export default function TabNavigation({ activeTab, onTabChange, scanData }) {
   };
 
   return (
-    <div className="glass-card border-b border-white/10 p-6 sticky top-0 z-40">
+    <div className="glass-card border-b border-white/10 p-6 sticky top-0 z-50">
       <div className="flex items-center space-x-2 overflow-x-auto">
         {tabs.map((tab) => {
           const Icon = tab.icon;

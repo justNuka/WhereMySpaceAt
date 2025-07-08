@@ -1,6 +1,10 @@
 // Fonctions utilitaires pour le formatage
 
 export const formatSize = (bytes) => {
+  if (bytes === null || bytes === undefined || isNaN(bytes) || bytes < 0) {
+    return '0 B';
+  }
+  
   if (bytes === 0) return '0 B';
   
   const k = 1024;

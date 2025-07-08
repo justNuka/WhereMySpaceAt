@@ -26,7 +26,7 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, '..', '..', 'dist', 'index.html'));
 
-  mainWindow.webContents.openDevTools();
+  // mainWindow.webContents.openDevTools();
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
