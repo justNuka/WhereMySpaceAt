@@ -19,15 +19,16 @@ module.exports = {
         use: {
           loader: 'babel-loader',
           options: {
-            // presets: [
-            //   ['@babel/preset-env', { modules: false }],
-            //   '@babel/preset-react',
-            // ],
             presets: [
               ['@babel/preset-react', { runtime: 'automatic' }]
             ]
           },
         },
+      },
+      {
+        test: /\.(ts|tsx)$/,
+        exclude: /node_modules/,
+        use: 'ts-loader',
       },
       {
         test: /\.css$/,
@@ -36,7 +37,10 @@ module.exports = {
     ],
   },
   resolve: {
-    extensions: ['.js', '.jsx'],
+    extensions: ['.js', '.jsx', '.ts', '.tsx'],
+    alias: {
+      '@': path.resolve(__dirname, 'src/renderer'),
+    },
   },
   plugins: [
     new HtmlWebpackPlugin({

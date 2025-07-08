@@ -65,6 +65,16 @@ class DirectoryScanner {
     try {
       const entries = await fs.readdir(dirPath, { withFileTypes: true });
       
+      // Log seulement pour les dossiers de niveau racine et quelques niveaux profonds
+      if (depth <= 2) {
+        parentPort.postMessage({
+          type: 'log',
+          level: 'info',
+          message: `Analyse du dossier: ${path.basename(dirPath)}`,
+          timestamp: new Date().toISOString()
+        });
+      }
+      
       for (const entry of entries) {
         const fullPath = path.join(dirPath, entry.name);
         
@@ -93,8 +103,8 @@ class DirectoryScanner {
           
           this.processedFiles++;
           
-          // Send progress update every 50 items
-          if (this.processedFiles % 50 === 0) {
+          // Send progress update every 100 items pour réduire les logs
+          if (this.processedFiles % 100 === 0) {
             // Estimation plus réaliste du progrès
             const estimatedTotal = Math.max(this.totalFiles, this.processedFiles * 2);
             const progress = Math.min(95, (this.processedFiles / estimatedTotal) * 100);
@@ -106,6 +116,16 @@ class DirectoryScanner {
               currentFile: fullPath,
               timestamp: new Date().toISOString()
             });
+            
+            // Log seulement lors des jalons importants
+            if (this.processedFiles % 1000 === 0) {
+              parentPort.postMessage({
+                type: 'log',
+                level: 'info',
+                message: `${this.processedFiles} fichiers traités...`,
+                timestamp: new Date().toISOString()
+              });
+            }
           }
           
         } catch (error) {

@@ -4,11 +4,15 @@ import { Terminal, ChevronDown, ChevronUp, AlertTriangle, Info, CheckCircle, XCi
 const LogPanel = ({ logs, isOpen, onToggle }) => {
   const logContainerRef = React.useRef(null);
   
+  // Limiter le nombre de logs affichés pour éviter les problèmes de performance
+  const MAX_LOGS = 100;
+  const displayedLogs = logs.slice(-MAX_LOGS);
+  
   React.useEffect(() => {
     if (logContainerRef.current && isOpen) {
       logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
     }
-  }, [logs, isOpen]);
+  }, [displayedLogs, isOpen]);
   
   const getLogIcon = (type) => {
     switch (type?.toLowerCase()) {
@@ -77,14 +81,14 @@ const LogPanel = ({ logs, isOpen, onToggle }) => {
             ref={logContainerRef}
             className="max-h-64 overflow-y-auto scrollbar-thin p-4 space-y-2"
           >
-            {logs.length === 0 ? (
+            {displayedLogs.length === 0 ? (
               <div className="text-center py-8">
                 <Terminal className="h-8 w-8 text-gray-500 mx-auto mb-2" />
                 <p className="text-gray-400">Aucun log pour le moment</p>
                 <p className="text-gray-500 text-sm">Les logs apparaîtront ici pendant le scan</p>
               </div>
             ) : (
-              logs.map((log, index) => (
+              displayedLogs.map((log, index) => (
                 <div 
                   key={log.id || index}
                   className="flex items-start space-x-3 p-3 glass-morphism rounded-lg border border-white/10 
@@ -106,10 +110,15 @@ const LogPanel = ({ logs, isOpen, onToggle }) => {
             )}
           </div>
           
-          {logs.length > 0 && (
+          {displayedLogs.length > 0 && (
             <div className="border-t border-white/10 px-4 py-2 bg-black/20">
               <p className="text-xs text-gray-500 text-center">
-                {logs.length} log{logs.length > 1 ? 's' : ''} affiché{logs.length > 1 ? 's' : ''}
+                {logs.length > MAX_LOGS ? `${displayedLogs.length}/${logs.length}` : displayedLogs.length} log{displayedLogs.length > 1 ? 's' : ''} affiché{displayedLogs.length > 1 ? 's' : ''}
+                {logs.length > MAX_LOGS && (
+                  <span className="ml-2 text-yellow-400">
+                    (Limite de {MAX_LOGS} logs atteinte)
+                  </span>
+                )}
               </p>
             </div>
           )}

@@ -1,38 +1,39 @@
-import React from 'react';
-import Icons from './Icons';
+import { Button } from "@/components/ui/button";
+import { Search, Play, Settings } from "lucide-react";
 
-const Header = ({ onNewScan, isScanning }) => {
-  
+export default function Header({ onNewScan, isScanning }) {
   return (
-    <header className="glass-morphism-dark rounded-2xl p-6 mb-6 border border-white/10">
+    <header className="glass-card border-b border-white/10 px-6 py-4 pt-12 sticky top-0 z-50" style={{ WebkitAppRegion: 'drag' }}>
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
-          <div className="p-3 bg-gradient-to-r from-purple-500 to-blue-500 rounded-xl">
-            <Icons.HardDrive />
+          <div className="w-12 h-12 bg-gradient-to-br from-white/20 to-white/10 rounded-xl flex items-center justify-center">
+            <Search className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-white">
-              Analyseur d'Espace Disque
-            </h1>
-            <p className="text-gray-300 text-sm">
-              Interface moderne avec style glassomorphism
-            </p>
+            <h1 className="text-2xl font-bold text-white">WhereMySpaceAt</h1>
+            <p className="text-sm text-gray-400">Analyseur d'espace disque</p>
           </div>
         </div>
-
-        <button
-          onClick={onNewScan}
-          disabled={isScanning}
-          className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-500 
-                   text-white rounded-lg hover:from-blue-600 hover:to-purple-600 transition-all duration-200
-                   disabled:opacity-50 disabled:cursor-not-allowed glass-morphism border border-white/20"
-        >
-          <Icons.RefreshCw spinning={isScanning} />
-          <span>Nouveau Scan</span>
-        </button>
+        
+        <div className="flex items-center space-x-4" style={{ WebkitAppRegion: 'no-drag' }}>
+          <Button
+            onClick={onNewScan}
+            disabled={isScanning}
+            className="bg-white text-black hover:bg-gray-100 font-semibold"
+          >
+            <Play className="w-4 h-4 mr-2 text-black" />
+            <span className="text-black">Nouveau scan</span>
+          </Button>
+          
+          <Button
+            variant="ghost"
+            size="sm"
+            className="glass-card text-white hover:bg-white/20"
+          >
+            <Settings className="w-4 h-4" />
+          </Button>
+        </div>
       </div>
     </header>
   );
-};
-
-export default Header;
+}

@@ -1,5 +1,6 @@
 // Fonctions utilitaires pour le formatage
-const formatSize = function(bytes) {
+
+export const formatSize = (bytes) => {
   if (bytes === 0) return '0 B';
   
   const k = 1024;
@@ -9,7 +10,7 @@ const formatSize = function(bytes) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };
 
-const formatFileCount = function(count) {
+export const formatFileCount = (count) => {
   if (count === 0) return '0 fichiers';
   if (count === 1) return '1 fichier';
   
@@ -19,11 +20,22 @@ const formatFileCount = function(count) {
   return `${(count / 1000000).toFixed(1)}M fichiers`;
 };
 
-// Compatibilité avec l'ancien code qui utilise window
-window.formatSize = formatSize;
-window.formatFileCount = formatFileCount;
+export const formatElapsedTime = (milliseconds) => {
+  if (milliseconds < 1000) return `${milliseconds}ms`;
+  if (milliseconds < 60000) return `${(milliseconds / 1000).toFixed(1)}s`;
+  if (milliseconds < 3600000) return `${Math.floor(milliseconds / 60000)}m ${Math.floor((milliseconds % 60000) / 1000)}s`;
+  
+  const hours = Math.floor(milliseconds / 3600000);
+  const minutes = Math.floor((milliseconds % 3600000) / 60000);
+  const seconds = Math.floor((milliseconds % 60000) / 1000);
+  
+  return `${hours}h ${minutes}m ${seconds}s`;
+};
 
-window.getSizeColor = function(size, maxSize) {
+// Alias pour la compatibilité
+export const formatDuration = formatElapsedTime;
+
+export const getSizeColor = (size, maxSize) => {
   const ratio = size / maxSize;
   
   if (ratio > 0.8) return 'text-red-400';
@@ -34,7 +46,7 @@ window.getSizeColor = function(size, maxSize) {
   return 'text-gray-400';
 };
 
-window.getSizeBadge = function(size, maxSize) {
+export const getSizeBadge = (size, maxSize) => {
   const ratio = size / maxSize;
   
   if (ratio > 0.8) return 'bg-red-500/20 text-red-300 border-red-500/30';

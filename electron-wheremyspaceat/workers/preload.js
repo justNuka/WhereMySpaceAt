@@ -11,6 +11,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   startScan: (targetPath, scanType) => ipcRenderer.invoke('start-scan', targetPath, scanType),
   stopScan: () => ipcRenderer.invoke('stop-scan'),
   
+  // Fonctions de nettoyage
+  scanCleanupItems: () => ipcRenderer.invoke('scan-cleanup-items'),
+  cleanupFiles: (selectedItems) => ipcRenderer.invoke('cleanup-files', selectedItems),
+  
   // Event listeners pour les mises à jour en temps réel
   onScanProgress: (callback) => {
     ipcRenderer.on('scan-progress', (event, data) => callback(data));

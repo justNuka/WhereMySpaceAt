@@ -215,3 +215,59 @@ ipcMain.handle('stop-scan', async () => {
   }
   return false;
 });
+
+// Fonctions de nettoyage
+ipcMain.handle('scan-cleanup-items', async () => {
+  // Mock data pour l'instant - à implémenter plus tard
+  return [
+    {
+      id: 'temp',
+      name: 'Fichiers temporaires',
+      description: 'Fichiers %temp%, cache navigateur, logs temporaires',
+      size: 2469396480, // 2.3 GB
+      fileCount: 4567,
+      type: 'temp',
+      progress: 75
+    },
+    {
+      id: 'duplicates',
+      name: 'Fichiers en double',
+      description: 'Copies identiques de fichiers existants',
+      size: 1932735283, // 1.8 GB
+      fileCount: 892,
+      type: 'duplicates',
+      progress: 45
+    },
+    {
+      id: 'trash',
+      name: 'Corbeille',
+      description: 'Fichiers supprimés mais non définitivement effacés',
+      size: 897581056, // 856 MB
+      fileCount: 234,
+      type: 'trash',
+      progress: 30
+    },
+    {
+      id: 'old-downloads',
+      name: 'Anciens téléchargements',
+      description: 'Fichiers téléchargés il y a plus de 30 jours',
+      size: 3435973837, // 3.2 GB
+      fileCount: 156,
+      type: 'old-downloads',
+      progress: 60
+    }
+  ];
+});
+
+ipcMain.handle('cleanup-files', async (event, selectedItems) => {
+  // Mock cleanup process - à implémenter plus tard
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      resolve({
+        success: true,
+        freedSpace: selectedItems.reduce((sum, item) => sum + item.size, 0),
+        cleanedFiles: selectedItems.reduce((sum, item) => sum + item.fileCount, 0)
+      });
+    }, 3000);
+  });
+});

@@ -1,76 +1,109 @@
-import React from 'react';
-import FileItem from './FileItem';
+import { useState } from 'react';
+import { ChevronRight, ChevronDown, Folder, FileText } from 'lucide-react';
+import { formatSize, formatFileCount } from '@/lib/formatUtils.js';
+import { cn } from '@/lib/utils';
 
-// Fonction utilitaire pour formater la taille
-const formatSize = (bytes) => {
-  if (bytes === 0) return "0 B";
-  const k = 1024;
-  const sizes = ["B", "Ko", "Mo", "Go", "To"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
+function TreeNode({ item, depth, minFileSize }) {
+  const [isExpanded, setIsExpanded] = useState(depth === 0);
+  
+  // Filter out items smaller than minFileSize
+  if (item.size < minFileSize * 1024 * 1024) {
+    return null;
+  }
+
+  const hasChildren = item.children && item.children.length > 0;
+  const isDirectory = item.type === 'directory';
+  
+  const filteredChildren = item.children?.filter(child => 
+    child.size >= minFileSize * 1024 * 1024
+  ) || [];
+
   return (
-    parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
+    <div className="tree-item">
+      <div 
+        className="p-3 rounded-lg cursor-pointer flex items-center space-x-3"
+        onClick={() => hasChildren && setIsExpanded(!isExpanded)}
+        style={{ paddingLeft: `${depth * 1.5 + 1}rem` }}
+      >
+        {hasChildren && (
+          <button className="tree-toggle w-4 h-4 flex items-center justify-center">
+            {isExpanded ? (
+              <ChevronDown className="w-3 h-3 text-gray-400" />
+            ) : (
+              <ChevronRight className="w-3 h-3 text-gray-400" />
+            )}
+          </button>
+        )}
+        
+        {!hasChildren && <div className="w-4 h-4" />}
+        
+        <div className={cn(
+          "w-6 h-6 rounded flex items-center justify-center",
+          isDirectory ? "bg-blue-500/20" : "bg-green-500/20"
+        )}>
+          {isDirectory ? (
+            <Folder className="w-4 h-4 text-blue-400" />
+          ) : (
+            <FileText className="w-4 h-4 text-green-400" />
+          )}
+        </div>
+        
+        <div className="flex-1">
+          <div className="flex items-center justify-between">
+            <span className="text-white font-medium">{item.name}</span>
+            <div className="flex items-center space-x-4">
+              {isDirectory && item.fileCount && (
+                <span className="text-sm text-gray-400">
+                  {formatFileCount(item.fileCount)}
+                </span>
+              )}
+              <span className="text-white font-semibold">
+                {formatSize(item.size)}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      {hasChildren && isExpanded && filteredChildren.length > 0 && (
+        <div className="ml-6 mt-2 space-y-1">
+          {filteredChildren.map((child, index) => (
+            <TreeNode 
+              key={`${child.path}-${index}`}
+              item={child} 
+              depth={depth + 1}
+              minFileSize={minFileSize}
+            />
+          ))}
+        </div>
+      )}
+    </div>
   );
-};
+}
 
-// Fonction utilitaire pour formater le nombre de fichiers
-const formatFileCount = (count) => {
-  if (count === 0) return "0 fichiers";
-  if (count === 1) return "1 fichier";
-  if (count < 1000) return `${count} fichiers`;
-  if (count < 1000000) return `${(count / 1000).toFixed(1)}K fichiers`;
-  return `${(count / 1000000).toFixed(1)}M fichiers`;
-};
-
-const TreeView = ({ data, minFileSize }) => {
-  const [expandedItems, setExpandedItems] = React.useState(
-    new Set([data?.path])
-  );
-
-  const handleToggle = (path) => {
-    setExpandedItems((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(path)) {
-        newSet.delete(path);
-      } else {
-        newSet.add(path);
-      }
-      return newSet;
-    });
-  };
-
+export default function TreeView({ data, minFileSize = 0 }) {
   if (!data) {
     return (
-      <div className="glass-morphism-dark rounded-2xl p-8 border border-white/10 text-center">
-        <p className="text-gray-400">
-          Aucune donnée à afficher. Démarrez un scan pour voir les résultats.
-        </p>
+      <div className="glass-card rounded-2xl p-8 text-center">
+        <p className="text-gray-400">Aucune donnée à afficher</p>
       </div>
     );
   }
 
   return (
-    <div className="glass-morphism-dark rounded-2xl border border-white/10">
-      <div className="p-4 border-b border-white/10">
-        <h2 className="text-xl font-semibold text-white">
-          Structure des Dossiers
-        </h2>
-        <p className="text-sm text-gray-300">
-          Taille totale: {formatSize(data.size)} • {formatFileCount(data.fileCount)}
-        </p>
+    <div className="glass-card rounded-2xl p-6">
+      <div className="flex items-center justify-between mb-6">
+        <h3 className="text-xl font-semibold text-white">Arborescence des fichiers</h3>
+        <div className="flex items-center space-x-2">
+          <span className="text-sm text-gray-400">
+            Taille minimale: {minFileSize} MB
+          </span>
+        </div>
       </div>
-
-      <div className="max-h-96 overflow-y-auto scrollbar-thin p-4">
-        <FileItem
-          item={data}
-          depth={0}
-          maxSize={data.size}
-          onToggle={handleToggle}
-          isExpanded={expandedItems.has(data.path)}
-          minSize={minFileSize}
-        />
+      
+      <div className="space-y-1 max-h-[600px] overflow-y-auto">
+        <TreeNode item={data} depth={0} minFileSize={minFileSize} />
       </div>
     </div>
   );
-};
-
-export default TreeView;
+}
