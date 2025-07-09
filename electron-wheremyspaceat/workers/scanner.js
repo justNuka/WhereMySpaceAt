@@ -11,7 +11,14 @@ class DirectoryScanner {
     this.totalSize = 0;
     this.processedFiles = 0;
     this.errors = [];
+    this.ignoredDirs = [];
+    this.permissionDeniedCount = 0;
+    this.adminRequiredDirs = [];
     this.startTime = Date.now();
+    this.estimatedTotal = 0;
+    this.lastProgressUpdate = 0;
+    this.progressUpdateInterval = 500; // Update every 500ms minimum
+    this.platform = process.platform;
   }
 
   async scan() {
@@ -44,8 +51,13 @@ class DirectoryScanner {
           totalDirectories: this.totalDirectories,
           totalSize: this.totalSize,
           errors: this.errors.length,
-          duration: Date.now() - this.startTime
+          ignoredDirs: this.ignoredDirs.length,
+          permissionDeniedCount: this.permissionDeniedCount,
+          adminRequiredDirs: this.adminRequiredDirs.length,
+          duration: Date.now() - this.startTime,
+          platform: this.platform
         },
+        progress: 100, // Assurer que le progrès est à 100% à la fin
         timestamp: new Date().toISOString()
       });
 
@@ -111,19 +123,42 @@ class DirectoryScanner {
           
           this.processedFiles++;
           
-          // Send progress update every 100 items pour réduire les logs
-          if (this.processedFiles % 100 === 0) {
-            // Estimation plus réaliste du progrès
-            const estimatedTotal = Math.max(this.totalFiles, this.processedFiles * 2);
-            const progress = Math.min(95, (this.processedFiles / estimatedTotal) * 100);
+          // Amélioration du système de progression
+          const now = Date.now();
+          const shouldUpdateProgress = (this.processedFiles % 50 === 0) || (now - this.lastProgressUpdate > this.progressUpdateInterval);
+          
+          if (shouldUpdateProgress) {
+            // Estimation adaptative basée sur la vitesse de scan
+            const elapsed = now - this.startTime;
+            const scanRate = this.processedFiles / (elapsed / 1000);
+            
+            // Estimation plus sophistiquée
+            if (this.estimatedTotal === 0 || this.processedFiles > this.estimatedTotal * 0.8) {
+              // Mise à jour de l'estimation basée sur la vitesse actuelle
+              this.estimatedTotal = Math.max(this.estimatedTotal, this.processedFiles * 1.5);
+            }
+            
+            // Calcul du progrès avec une courbe logarithmique pour plus de réalisme
+            let progress;
+            if (this.estimatedTotal > 0) {
+              const rawProgress = (this.processedFiles / this.estimatedTotal) * 100;
+              // Courbe logarithmique pour ralentir la progression vers la fin
+              progress = Math.min(95, rawProgress * (1 - Math.exp(-rawProgress / 30)));
+            } else {
+              progress = Math.min(95, (this.processedFiles / 1000) * 100);
+            }
             
             parentPort.postMessage({
               type: 'progress',
               progress: progress,
               processed: this.processedFiles,
               currentFile: fullPath,
+              scanRate: Math.round(scanRate),
+              estimatedTotal: this.estimatedTotal,
               timestamp: new Date().toISOString()
             });
+            
+            this.lastProgressUpdate = now;
             
             // Log seulement lors des jalons importants
             if (this.processedFiles % 1000 === 0) {
@@ -140,27 +175,12 @@ class DirectoryScanner {
           this.errors.push({
             path: fullPath,
             error: error.message,
-            code: error.code
+            code: error.code,
+            entryName: entry.name
           });
           
-          // Plus user-friendly pour les erreurs de permission
-          let logMessage = `Accès refusé: ${entry.name}`;
-          if (error.code === 'EPERM') {
-            logMessage = `Permissions insuffisantes pour accéder à: ${entry.name}`;
-          } else if (error.code === 'EACCES') {
-            logMessage = `Accès refusé pour: ${entry.name} (permissions système)`;
-          } else if (error.code === 'ENOENT') {
-            logMessage = `Fichier/dossier introuvable: ${entry.name}`;
-          } else {
-            logMessage = `Erreur lors de l'accès à ${entry.name}: ${error.message}`;
-          }
-          
-          parentPort.postMessage({
-            type: 'log',
-            level: 'warning',
-            message: logMessage,
-            timestamp: new Date().toISOString()
-          });
+          // Gestion spécifique des erreurs selon la plateforme
+          this.handlePermissionError(error, fullPath, entry.name);
         }
       }
       
@@ -171,28 +191,131 @@ class DirectoryScanner {
       this.errors.push({
         path: dirPath,
         error: error.message,
-        code: error.code
+        code: error.code,
+        isDirectory: true
       });
       
-      // Messages d'erreur plus clairs
-      let logMessage = `Impossible d'analyser le dossier: ${path.basename(dirPath)}`;
-      if (error.code === 'EPERM' || error.code === 'EACCES') {
-        logMessage = `Permissions insuffisantes pour scanner: ${path.basename(dirPath)}`;
-      } else if (error.code === 'ENOENT') {
-        logMessage = `Dossier introuvable: ${path.basename(dirPath)}`;
-      } else {
-        logMessage = `Erreur lors du scan de ${path.basename(dirPath)}: ${error.message}`;
-      }
-      
-      parentPort.postMessage({
-        type: 'log',
-        level: 'error',
-        message: logMessage,
-        timestamp: new Date().toISOString()
-      });
+      // Gestion des erreurs de dossier
+      this.handleDirectoryError(error, dirPath);
     }
 
     return item;
+  }
+
+  handlePermissionError(error, fullPath, entryName) {
+    let logMessage = '';
+    let logLevel = 'warning';
+    
+    if (error.code === 'EPERM' || error.code === 'EACCES') {
+      this.permissionDeniedCount++;
+      
+      if (this.platform === 'win32') {
+        // Windows - détecter si droits admin requis
+        if (this.isAdminRequiredPath(fullPath)) {
+          this.adminRequiredDirs.push(fullPath);
+          logMessage = `🔒 Droits administrateur requis pour: ${entryName}`;
+          logLevel = 'info';
+        } else {
+          logMessage = `⚠️ Accès refusé: ${entryName} (permissions insuffisantes)`;
+        }
+      } else if (this.platform === 'darwin') {
+        // macOS - permissions système
+        if (this.isMacOSProtectedPath(fullPath)) {
+          logMessage = `🛡️ Dossier protégé par macOS: ${entryName} (permissions système requises)`;
+          logLevel = 'info';
+        } else {
+          logMessage = `⚠️ Accès refusé: ${entryName} - Vérifiez les permissions dans Préférences Système`;
+        }
+      } else {
+        // Linux/Unix
+        logMessage = `⚠️ Permissions insuffisantes pour: ${entryName}`;
+      }
+      
+      this.ignoredDirs.push(fullPath);
+    } else if (error.code === 'ENOENT') {
+      logMessage = `📂 Fichier/dossier introuvable: ${entryName} (lien symbolique cassé?)`;
+    } else if (error.code === 'EMFILE' || error.code === 'ENFILE') {
+      logMessage = `⚠️ Trop de fichiers ouverts - réessayez plus tard: ${entryName}`;
+    } else {
+      logMessage = `❌ Erreur lors de l'accès à ${entryName}: ${error.message}`;
+    }
+    
+    parentPort.postMessage({
+      type: 'log',
+      level: logLevel,
+      message: logMessage,
+      timestamp: new Date().toISOString()
+    });
+  }
+
+  handleDirectoryError(error, dirPath) {
+    const dirName = path.basename(dirPath);
+    let logMessage = '';
+    let logLevel = 'error';
+    
+    if (error.code === 'EPERM' || error.code === 'EACCES') {
+      this.permissionDeniedCount++;
+      this.ignoredDirs.push(dirPath);
+      
+      if (this.platform === 'win32' && this.isAdminRequiredPath(dirPath)) {
+        this.adminRequiredDirs.push(dirPath);
+        logMessage = `🔒 Dossier nécessitant les droits administrateur ignoré: ${dirName}`;
+        logLevel = 'info';
+      } else {
+        logMessage = `🚫 Impossible d'analyser le dossier: ${dirName} (permissions insuffisantes)`;
+      }
+    } else if (error.code === 'ENOENT') {
+      logMessage = `📂 Dossier introuvable: ${dirName}`;
+    } else {
+      logMessage = `❌ Erreur lors du scan de ${dirName}: ${error.message}`;
+    }
+    
+    parentPort.postMessage({
+      type: 'log',
+      level: logLevel,
+      message: logMessage,
+      timestamp: new Date().toISOString()
+    });
+  }
+
+  isAdminRequiredPath(filePath) {
+    if (this.platform !== 'win32') return false;
+    
+    const adminPaths = [
+      'System Volume Information',
+      'Windows\\System32',
+      'Windows\\SysWOW64',
+      'Program Files',
+      'Program Files (x86)',
+      'ProgramData',
+      'Windows\\WinSxS',
+      '$Recycle.Bin'
+    ];
+    
+    return adminPaths.some(adminPath => 
+      filePath.toLowerCase().includes(adminPath.toLowerCase())
+    );
+  }
+
+  isMacOSProtectedPath(filePath) {
+    if (this.platform !== 'darwin') return false;
+    
+    const protectedPaths = [
+      '/System/',
+      '/usr/bin/',
+      '/usr/sbin/',
+      '/private/var/db/',
+      '/private/var/log/',
+      '/Library/Application Support/com.apple.',
+      '/.DocumentRevisions-V100/',
+      '/.Spotlight-V100/',
+      '/.fseventsd/',
+      '/.Trashes/'
+    ];
+    
+    return protectedPaths.some(protectedPath => 
+      filePath.includes(protectedPath)
+    );
   }
 }
 

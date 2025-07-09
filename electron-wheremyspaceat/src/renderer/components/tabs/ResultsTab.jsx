@@ -44,7 +44,7 @@ export default function ResultsTab({ scanData, scanStats }) {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <StatsCard
             title="Taille totale"
-            value={formatSize(scanStats.totalSize)}
+            value={formatSize(scanStats?.totalSize || 0)}
             icon={<BarChart3 className="w-6 h-6" />}
             iconColor="text-green-400"
             iconBg="bg-green-500/20"
@@ -52,7 +52,7 @@ export default function ResultsTab({ scanData, scanStats }) {
           
           <StatsCard
             title="Fichiers scannés"
-            value={scanStats.totalFiles.toLocaleString()}
+            value={(scanStats?.totalFiles || 0).toLocaleString()}
             icon={<FileText className="w-6 h-6" />}
             iconColor="text-blue-400"
             iconBg="bg-blue-500/20"
@@ -60,7 +60,7 @@ export default function ResultsTab({ scanData, scanStats }) {
           
           <StatsCard
             title="Temps de scan"
-            value={formatDuration(scanStats.duration)}
+            value={formatDuration(scanStats?.duration || 0)}
             icon={<Clock className="w-6 h-6" />}
             iconColor="text-purple-400"
             iconBg="bg-purple-500/20"
@@ -68,7 +68,7 @@ export default function ResultsTab({ scanData, scanStats }) {
           
           <StatsCard
             title="Dossiers analysés"
-            value={scanStats.totalDirectories ? scanStats.totalDirectories.toLocaleString() : 'N/A'}
+            value={scanStats?.totalDirectories ? scanStats.totalDirectories.toLocaleString() : '0'}
             icon={<FolderOpen className="w-6 h-6" />}
             iconColor="text-orange-400"
             iconBg="bg-orange-500/20"

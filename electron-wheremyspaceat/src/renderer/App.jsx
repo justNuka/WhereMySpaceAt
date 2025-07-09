@@ -18,6 +18,7 @@ function App() {
     currentFile,
     processedFiles,
     scanStats,
+    liveStats,
     startScan,
     stopScan,
     resetScan,
@@ -52,6 +53,7 @@ function App() {
             processedFiles={processedFiles}
             onStop={stopScan}
             elapsedTime={getElapsedTime()}
+            liveStats={liveStats}
           />
         );
       case 'results':

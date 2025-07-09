@@ -13,18 +13,56 @@ export default function ScannerTab({
   currentFile,
   processedFiles,
   onStop,
-  elapsedTime
+  elapsedTime,
+  liveStats
 }) {
   const [scanType, setScanType] = useState('folder');
   const [selectedPath, setSelectedPath] = useState('');
   const [drives, setDrives] = useState([]);
+  const [isLoadingDrives, setIsLoadingDrives] = useState(true);
 
   useEffect(() => {
-    // Load available drives
-    if (window.electronAPI) {
-      window.electronAPI.getDrives().then(setDrives);
-    }
+    // Effectuer le prescan des disques au chargement
+    const loadDrives = async () => {
+      if (window.electronAPI) {
+        setIsLoadingDrives(true);
+        try {
+          const driveList = await window.electronAPI.prescanDrives();
+          setDrives(driveList);
+          console.log('Drives loaded:', driveList);
+        } catch (error) {
+          console.error('Failed to load drives:', error);
+          // Fallback vers l'ancienne méthode
+          try {
+            const fallbackDrives = await window.electronAPI.getDrives();
+            setDrives(fallbackDrives);
+          } catch (fallbackError) {
+            console.error('Fallback failed:', fallbackError);
+          }
+        } finally {
+          setIsLoadingDrives(false);
+        }
+      }
+    };
+
+    loadDrives();
   }, []);
+
+  useEffect(() => {
+    // Reset selection only for drive scan type if the selected drive is no longer accessible
+    if (selectedPath && drives.length > 0 && scanType === 'drive') {
+      const selectedDrive = drives.find(drive => drive.path === selectedPath);
+      if (!selectedDrive || !selectedDrive.accessible) {
+        setSelectedPath('');
+      }
+    }
+  }, [drives, selectedPath, scanType]);
+
+  const setScanTypeAndClearPath = (newType) => {
+    setScanType(newType);
+    // Clear path when changing scan type to avoid confusion
+    setSelectedPath('');
+  };
 
   const handleSelectPath = async () => {
     if (!window.electronAPI) return;
@@ -35,10 +73,15 @@ export default function ScannerTab({
         setSelectedPath(path);
       }
     }
+    // Pour le scanType 'drive', la sélection se fait via le Select dropdown
   };
 
   const handleStartScan = () => {
-    if (!selectedPath) return;
+    if (!selectedPath) {
+      console.log('No path selected');
+      return;
+    }
+    console.log(`Starting scan: ${selectedPath} (${scanType})`);
     onScanStart(selectedPath, scanType);
   };
 
@@ -58,7 +101,7 @@ export default function ScannerTab({
                   className={`glass-card p-4 border-2 cursor-pointer transition-all ${
                     scanType === 'folder' ? 'border-white' : 'border-white/20 hover:border-white/40'
                   }`}
-                  onClick={() => setScanType('folder')}
+                  onClick={() => setScanTypeAndClearPath('folder')}
                 >
                   <CardContent className="p-0">
                     <div className="flex items-center space-x-3">
@@ -77,7 +120,7 @@ export default function ScannerTab({
                   className={`glass-card p-4 border-2 cursor-pointer transition-all ${
                     scanType === 'drive' ? 'border-white' : 'border-white/20 hover:border-white/40'
                   }`}
-                  onClick={() => setScanType('drive')}
+                  onClick={() => setScanTypeAndClearPath('drive')}
                 >
                   <CardContent className="p-0">
                     <div className="flex items-center space-x-3">
@@ -118,20 +161,95 @@ export default function ScannerTab({
                   </Button>
                 </div>
               ) : (
-                <Select value={selectedPath} onValueChange={setSelectedPath}>
-                  <SelectTrigger className="glass-card border-white/20 text-white">
-                    <SelectValue placeholder="Sélectionner un disque" />
-                  </SelectTrigger>
-                  <SelectContent className="glass-card border-white/20">
-                    {drives.map((drive) => (
-                      <SelectItem key={drive.path} value={drive.path}>
-                        {drive.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="space-y-3">
+                  <Select 
+                    value={selectedPath} 
+                    onValueChange={setSelectedPath}
+                    disabled={isLoadingDrives}
+                  >
+                    <SelectTrigger className="glass-card border-white/20 text-white">
+                      <SelectValue 
+                        placeholder={isLoadingDrives ? "Analyse des disques..." : "Sélectionner un disque"}
+                      >
+                        {selectedPath && drives.find(d => d.path === selectedPath)?.name}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent className="glass-card border-white/20 bg-gray-900/95 backdrop-blur-sm">
+                      {drives.filter(drive => drive.accessible).map((drive) => (
+                        <SelectItem 
+                          key={drive.path} 
+                          value={drive.path}
+                          className="text-white hover:bg-white/10 focus:bg-white/10"
+                        >
+                          <div className="flex flex-col w-full">
+                            <span className="text-white font-medium">
+                              {drive.name}
+                            </span>
+                            {drive.estimatedItems !== undefined && (
+                              <span className="text-xs text-gray-400">
+                                ~{drive.estimatedItems} éléments 
+                                {drive.estimatedSize > 0 && `, ${formatSize(drive.estimatedSize * 20)} estimé`}
+                              </span>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))}
+                      {drives.filter(drive => drive.accessible).length === 0 && !isLoadingDrives && (
+                        <SelectItem value="" disabled className="text-gray-500">
+                          Aucun disque accessible trouvé
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  
+                  {isLoadingDrives && (
+                    <div className="text-sm text-gray-400 flex items-center space-x-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      <span>Analyse des disques disponibles...</span>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
+            
+            {/* Drives Detection Info */}
+            {drives.length > 0 && (
+              <div className="mt-6">
+                <h4 className="text-sm font-medium text-white mb-3 flex items-center space-x-2">
+                  <HardDrive className="w-4 h-4" />
+                  <span>Disques détectés ({drives.length})</span>
+                </h4>
+                <div className="space-y-2 max-h-32 overflow-y-auto">
+                  {drives.map((drive) => (
+                    <div 
+                      key={drive.path} 
+                      className={`p-2 rounded-lg border ${
+                        drive.accessible 
+                          ? 'bg-green-500/10 border-green-500/30 text-green-400' 
+                          : 'bg-red-500/10 border-red-500/30 text-red-400'
+                      }`}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <div className="font-medium text-sm">{drive.name}</div>
+                          <div className="text-xs opacity-70">{drive.path}</div>
+                        </div>
+                        <div className="text-xs text-right ml-2">
+                          <div className={drive.accessible ? 'text-green-400' : 'text-red-400'}>
+                            {drive.accessible ? 'Accessible' : 'Non accessible'}
+                          </div>
+                          {drive.accessible && drive.estimatedItems !== undefined && (
+                            <div className="text-gray-400">
+                              ~{drive.estimatedItems} éléments
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             
             {/* Scan Controls */}
             <div className="flex items-center space-x-4">
@@ -148,44 +266,69 @@ export default function ScannerTab({
         </Card>
       </div>
       
-      {/* Live Stats */}
+      {/* Progress and Stats */}
       <div className="space-y-6">
-        <Card className="glass-card border-white/10">
-          <CardContent className="p-6">
-            <h3 className="text-lg font-semibold text-white mb-4 mt-2">Statistiques en temps réel</h3>
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400">Fichiers scannés</span>
-                <span className="text-white font-semibold">
-                  {processedFiles.toLocaleString()}
-                </span>
-              </div>
-              
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400">Temps écoulé</span>
-                <span className="text-white font-semibold">
-                  {formatElapsedTime(elapsedTime)}
-                </span>
-              </div>
-              
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400">Vitesse</span>
-                <span className="text-white font-semibold">
-                  {elapsedTime > 0 ? Math.floor(processedFiles / (elapsedTime / 1000)) : 0} f/s
-                </span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
         <ProgressCard 
           progress={progress}
           isScanning={isScanning}
-          currentFile={currentFile}
-          processedFiles={processedFiles}
-          onStop={onStop}
-          elapsedTime={elapsedTime}
+          currentFile={currentFile}            processedFiles={processedFiles}
+            onStop={onStop}
+            elapsedTime={elapsedTime}
+            showStats={true}
+            scanStats={liveStats}
         />
+        
+        {/* Disques détectés */}
+        {!isLoadingDrives && drives.length > 0 && (
+          <Card className="glass-card border-white/10">
+            <CardContent className="p-6">
+              <h3 className="text-lg font-semibold text-white mb-4 mt-2">Disques détectés</h3>
+              <div className="space-y-3">
+                {drives.filter(drive => drive.accessible).map((drive) => (
+                  <div key={drive.path} className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                    <div className="flex items-center space-x-3">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                        drive.type === 'drive' ? 'bg-blue-500/20' : 'bg-green-500/20'
+                      }`}>
+                        <HardDrive className={`w-4 h-4 ${
+                          drive.type === 'drive' ? 'text-blue-400' : 'text-green-400'
+                        }`} />
+                      </div>
+                      <div>
+                        <p className="text-white text-sm font-medium">{drive.name}</p>
+                        <p className="text-xs text-gray-400">{drive.path}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      {drive.estimatedItems !== undefined && (
+                        <p className="text-xs text-gray-400">
+                          ~{drive.estimatedItems} éléments
+                        </p>
+                      )}
+                      {drive.platform && (
+                        <p className="text-xs text-gray-500 capitalize">
+                          {drive.platform}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                
+                {drives.filter(drive => !drive.accessible).length > 0 && (
+                  <div className="mt-4 pt-3 border-t border-white/10">
+                    <p className="text-xs text-gray-500 mb-2">Non accessibles:</p>
+                    {drives.filter(drive => !drive.accessible).map((drive) => (
+                      <div key={drive.path} className="flex items-center space-x-2 text-xs text-gray-600">
+                        <span>•</span>
+                        <span>{drive.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );

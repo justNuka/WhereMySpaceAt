@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { formatSize, formatFileCount } from '@/lib/formatUtils.js';
-import { Trash2, Copy, Download, History } from "lucide-react";
+import { Trash2, Copy, Download, History, ChevronDown, ChevronUp, Eye, Folder } from "lucide-react";
 
 const getIconColor = (type) => {
   switch (type) {
@@ -25,6 +25,9 @@ export default function CleanTab() {
   const [cleanupItems, setCleanupItems] = useState([]);
   const [isCleaningUp, setIsCleaningUp] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [expandedItems, setExpandedItems] = useState(new Set());
+  const [itemDetails, setItemDetails] = useState({});
+  const [cleanupProgress, setCleanupProgress] = useState(0);
 
   useEffect(() => {
     loadCleanupItems();
@@ -51,6 +54,28 @@ export default function CleanTab() {
     );
   };
 
+  const toggleExpanded = async (itemId) => {
+    const newExpanded = new Set(expandedItems);
+    
+    if (expandedItems.has(itemId)) {
+      newExpanded.delete(itemId);
+    } else {
+      newExpanded.add(itemId);
+      
+      // Charger les détails si pas encore chargés
+      if (!itemDetails[itemId] && window.electronAPI) {
+        try {
+          const details = await window.electronAPI.getCleanupItemDetails(itemId);
+          setItemDetails(prev => ({ ...prev, [itemId]: details }));
+        } catch (error) {
+          console.error('Failed to load item details:', error);
+        }
+      }
+    }
+    
+    setExpandedItems(newExpanded);
+  };
+
   const getSelectedStats = () => {
     const selected = cleanupItems.filter(item => item.selected);
     const totalSize = selected.reduce((sum, item) => sum + item.size, 0);
@@ -62,22 +87,33 @@ export default function CleanTab() {
     if (!window.electronAPI) return;
     
     setIsCleaningUp(true);
+    setCleanupProgress(0);
+    
     try {
       const selectedItems = cleanupItems.filter(item => item.selected);
+      
+      // Écouter les mises à jour de progression
+      const removeProgressListener = window.electronAPI.onCleanupProgress((progress) => {
+        setCleanupProgress(progress);
+      });
+      
       const result = await window.electronAPI.cleanupFiles(selectedItems);
       
       if (result.success) {
-        // Reset selected items after successful cleanup
-        setCleanupItems(prev =>
-          prev.map(item =>
-            item.selected ? { ...item, selected: false, size: 0, fileCount: 0 } : item
-          )
-        );
+        // Recharger les éléments après nettoyage
+        await loadCleanupItems();
+        setExpandedItems(new Set()); // Fermer tous les éléments expandés
+        setItemDetails({}); // Vider le cache des détails
       }
+      
+      // Nettoyer l'écouteur
+      removeProgressListener();
+      
     } catch (error) {
       console.error('Cleanup failed:', error);
     } finally {
       setIsCleaningUp(false);
+      setCleanupProgress(0);
     }
   };
 
@@ -108,13 +144,27 @@ export default function CleanTab() {
                 disabled={selectedStats.totalSize === 0 || isCleaningUp}
                 className="bg-red-500 text-white hover:bg-red-600"
               >
-                {isCleaningUp ? 'Nettoyage...' : 'Nettoyer la sélection'}
+                {isCleaningUp ? `Nettoyage... ${Math.round(cleanupProgress)}%` : 'Nettoyer la sélection'}
               </Button>
             </div>
+            
+            {/* Barre de progression du nettoyage */}
+            {isCleaningUp && (
+              <div className="mb-6">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm text-gray-400">Nettoyage en cours...</span>
+                  <span className="text-sm text-white">{Math.round(cleanupProgress)}%</span>
+                </div>
+                <Progress value={cleanupProgress} className="h-2" />
+              </div>
+            )}
             
             <div className="space-y-4">
               {cleanupItems.map((item) => {
                 const colors = getIconColor(item.type);
+                const isExpanded = expandedItems.has(item.id);
+                const details = itemDetails[item.id];
+                
                 return (
                   <Card key={item.id} className="glass-card border-white/10">
                     <CardContent className="p-4">
@@ -150,7 +200,50 @@ export default function CleanTab() {
                           <p className="text-white font-bold">{formatSize(item.size)}</p>
                           <p className="text-sm text-gray-400">{formatFileCount(item.fileCount)}</p>
                         </div>
+                        
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => toggleExpanded(item.id)}
+                          className="text-gray-400 hover:text-white"
+                        >
+                          {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        </Button>
                       </div>
+                      
+                      {/* Détails expandés */}
+                      {isExpanded && (
+                        <div className="mt-4 border-t border-white/10 pt-4">
+                          <div className="flex items-center space-x-2 mb-3">
+                            <Eye className="w-4 h-4 text-gray-400" />
+                            <span className="text-sm text-white font-medium">Fichiers à supprimer</span>
+                          </div>
+                          
+                          {details ? (
+                            <div className="space-y-2 max-h-40 overflow-y-auto">
+                              {details.files.map((file, index) => (
+                                <div key={index} className="flex items-center space-x-3 p-2 glass-card rounded">
+                                  <Folder className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm text-white truncate">{file.name}</p>
+                                    <p className="text-xs text-gray-400">{file.path}</p>
+                                  </div>
+                                  <span className="text-xs text-gray-400 flex-shrink-0">{formatSize(file.size)}</span>
+                                </div>
+                              ))}
+                              {details.files.length > 10 && (
+                                <p className="text-xs text-gray-400 text-center py-2">
+                                  ... et {details.totalFiles - 10} autres fichiers
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="text-center py-4">
+                              <p className="text-sm text-gray-400">Chargement des détails...</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 );

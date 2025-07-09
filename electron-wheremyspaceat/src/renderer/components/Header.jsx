@@ -1,7 +1,50 @@
+import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
-import { Search, Play, Settings } from "lucide-react";
+import { Search, Play, Settings, Shield, ShieldCheck } from "lucide-react";
 
 export default function Header({ onNewScan, isScanning }) {
+  const [adminStatus, setAdminStatus] = useState({ isAdmin: false, platform: 'unknown' });
+
+  useEffect(() => {
+    // Vérifier le statut administrateur au chargement
+    const checkAdmin = async () => {
+      if (window.electronAPI) {
+        try {
+          const status = await window.electronAPI.checkAdminPrivileges();
+          setAdminStatus(status);
+        } catch (error) {
+          console.error('Failed to check admin privileges:', error);
+        }
+      }
+    };
+    
+    checkAdmin();
+  }, []);
+
+  const handleRelaunchAsAdmin = async () => {
+    if (window.electronAPI) {
+      try {
+        await window.electronAPI.relaunchAsAdmin();
+      } catch (error) {
+        console.error('Failed to relaunch as admin:', error);
+      }
+    }
+  };
+
+  const getAdminButtonText = () => {
+    switch (adminStatus.platform) {
+      case 'win32':
+      case 'windows':
+        return 'Relancer en admin';
+      case 'darwin':
+        return 'Relancer avec sudo';
+      case 'linux':
+        return 'Relancer avec sudo';
+      default:
+        return 'Privilèges élevés';
+    }
+  };
+
   return (
     <header className="glass-card border-b border-white/10 px-6 py-4 pt-12 sticky top-0 z-[60]" style={{ WebkitAppRegion: 'drag' }}>
       <div className="flex items-center justify-between">
@@ -24,6 +67,28 @@ export default function Header({ onNewScan, isScanning }) {
             <Play className="w-4 h-4 mr-2 text-black" />
             <span className="text-black">Nouveau scan</span>
           </Button>
+          
+          {!adminStatus.isAdmin && (
+            <Button
+              onClick={handleRelaunchAsAdmin}
+              disabled={isScanning}
+              variant="outline"
+              className="border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/10 font-semibold"
+              title="Relancer avec des privilèges élevés pour un scan complet"
+            >
+              <Shield className="w-4 h-4 mr-2" />
+              <span>{getAdminButtonText()}</span>
+            </Button>
+          )}
+          
+          {adminStatus.isAdmin && (
+            <div className="flex items-center space-x-2 px-3 py-2 bg-green-500/20 border border-green-500/30 rounded-lg">
+              <ShieldCheck className="w-4 h-4 text-green-400" />
+              <span className="text-sm text-green-400 font-medium">
+                Privilèges élevés
+              </span>
+            </div>
+          )}
           
           <Button
             variant="ghost"

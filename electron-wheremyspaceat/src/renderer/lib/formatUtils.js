@@ -7,7 +7,35 @@ export const formatSize = (bytes) => {
   
   if (bytes === 0) return '0 B';
   
-  const k = 1024;
+  // Calcul binaire (technique)
+  const kBinary = 1024;
+  const sizesBinary = ['B', 'Ko', 'Mo', 'Go', 'To'];
+  const iBinary = Math.floor(Math.log(bytes) / Math.log(kBinary));
+  const binarySize = parseFloat((bytes / Math.pow(kBinary, iBinary)).toFixed(2));
+  
+  // Calcul décimal (système)
+  const kDecimal = 1000;
+  const sizesDecimal = ['B', 'Ko', 'Mo', 'Go', 'To'];
+  const iDecimal = Math.floor(Math.log(bytes) / Math.log(kDecimal));
+  const decimalSize = parseFloat((bytes / Math.pow(kDecimal, iDecimal)).toFixed(2));
+  
+  // Si les valeurs sont identiques ou très proches, afficher seulement une version
+  if (Math.abs(binarySize - decimalSize) < 0.01 || bytes < 1024) {
+    return `${binarySize} ${sizesBinary[iBinary]}`;
+  }
+  
+  return `${binarySize} ${sizesBinary[iBinary]} (${decimalSize} ${sizesDecimal[iDecimal]} sys)`;
+};
+
+// Version avec unités décimales (comme le système d'exploitation)
+export const formatSizeDecimal = (bytes) => {
+  if (bytes === null || bytes === undefined || isNaN(bytes) || bytes < 0) {
+    return '0 B';
+  }
+  
+  if (bytes === 0) return '0 B';
+  
+  const k = 1000; // Unités décimales
   const sizes = ['B', 'Ko', 'Mo', 'Go', 'To'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   
@@ -15,6 +43,10 @@ export const formatSize = (bytes) => {
 };
 
 export const formatFileCount = (count) => {
+  if (count === null || count === undefined || isNaN(count) || count < 0) {
+    return '0 fichiers';
+  }
+  
   if (count === 0) return '0 fichiers';
   if (count === 1) return '1 fichier';
   
@@ -25,6 +57,10 @@ export const formatFileCount = (count) => {
 };
 
 export const formatElapsedTime = (milliseconds) => {
+  if (milliseconds === null || milliseconds === undefined || isNaN(milliseconds) || milliseconds < 0) {
+    return '0ms';
+  }
+  
   if (milliseconds < 1000) return `${milliseconds}ms`;
   if (milliseconds < 60000) return `${(milliseconds / 1000).toFixed(1)}s`;
   if (milliseconds < 3600000) return `${Math.floor(milliseconds / 60000)}m ${Math.floor((milliseconds % 60000) / 1000)}s`;
@@ -40,6 +76,11 @@ export const formatElapsedTime = (milliseconds) => {
 export const formatDuration = formatElapsedTime;
 
 export const getSizeColor = (size, maxSize) => {
+  if (size === null || size === undefined || isNaN(size) || 
+      maxSize === null || maxSize === undefined || isNaN(maxSize) || maxSize === 0) {
+    return 'text-gray-400';
+  }
+  
   const ratio = size / maxSize;
   
   if (ratio > 0.8) return 'text-red-400';
@@ -51,6 +92,11 @@ export const getSizeColor = (size, maxSize) => {
 };
 
 export const getSizeBadge = (size, maxSize) => {
+  if (size === null || size === undefined || isNaN(size) || 
+      maxSize === null || maxSize === undefined || isNaN(maxSize) || maxSize === 0) {
+    return 'bg-gray-500/20 text-gray-300 border-gray-500/30';
+  }
+  
   const ratio = size / maxSize;
   
   if (ratio > 0.8) return 'bg-red-500/20 text-red-300 border-red-500/30';

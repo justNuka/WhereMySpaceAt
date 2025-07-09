@@ -8,6 +8,7 @@ export const useScan = () => {
   const [currentFile, setCurrentFile] = useState('');
   const [processedFiles, setProcessedFiles] = useState(0);
   const [scanStats, setScanStats] = useState(null);
+  const [liveStats, setLiveStats] = useState({ ignoredDirs: 0, permissionDeniedCount: 0, adminRequiredDirs: 0 });
   const [scanStartTime, setScanStartTime] = useState(null);
 
   useEffect(() => {
@@ -16,6 +17,11 @@ export const useScan = () => {
         setProgress(data.progress || 0);
         setCurrentFile(data.currentFile || '');
         setProcessedFiles(data.processed || 0);
+        
+        // Mettre à jour les statistiques en temps réel si disponibles
+        if (data.stats) {
+          setLiveStats(data.stats);
+        }
       });
 
       window.electronAPI.onScanLog((data) => {
@@ -43,6 +49,7 @@ export const useScan = () => {
     setCurrentFile('');
     setProcessedFiles(0);
     setScanStats(null);
+    setLiveStats({ ignoredDirs: 0, permissionDeniedCount: 0, adminRequiredDirs: 0 });
     setScanStartTime(Date.now());
     
     // Add initial log
@@ -57,6 +64,9 @@ export const useScan = () => {
       const response = await window.electronAPI.startScan(targetPath, scanType);
       setScanData(response.result);
       setScanStats(response.stats);
+      
+      // Assurer que le progrès est à 100% à la fin
+      setProgress(100);
       
       setLogs(prev => [...prev, {
         id: Date.now().toString(),
@@ -102,6 +112,7 @@ export const useScan = () => {
     setCurrentFile('');
     setProcessedFiles(0);
     setScanStats(null);
+    setLiveStats({ ignoredDirs: 0, permissionDeniedCount: 0, adminRequiredDirs: 0 });
     setScanStartTime(null);
   }, []);
 
@@ -118,6 +129,7 @@ export const useScan = () => {
     currentFile,
     processedFiles,
     scanStats,
+    liveStats,
     scanStartTime,
     startScan,
     stopScan,
