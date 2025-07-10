@@ -50,6 +50,18 @@ function createWindow() {
     vibrancy: 'dark'
   });
 
+  // Activer la console de dev
+  if (isDev) {
+    mainWindow.webContents.openDevTools({ mode: 'detach' });
+  }
+  
+  // Gérer les erreurs de chargement
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+    console.error(`Failed to load: ${errorCode} - ${errorDescription}`);
+    dialog.showErrorBox('Erreur de chargement', `L'application n'a pas pu charger le contenu.\nCode d'erreur: ${errorCode}\nDescription: ${errorDescription}`);
+    app.quit();
+  });
+
   // Charger l'URL ou le fichier HTML selon l'environnement
   const rendererPath = getRendererPath();
   if (rendererPath.startsWith('http')) {
@@ -427,420 +439,72 @@ ipcMain.handle('stop-scan', async () => {
   return false;
 });
 
-// Fonctions de nettoyage
-ipcMain.handle('scan-cleanup-items', async () => {
+ipcMain.handle('move-to-trash', async (event, filePaths) => {
   try {
-    const os = require('os');
-    const items = [];
-    
-    // 1. Fichiers temporaires
-    const tempPath = os.tmpdir();
-    const tempStats = await scanDirectory(tempPath, { maxDepth: 2 });
-    const tempProgress = tempStats.size > 0 ? Math.min((tempStats.size / (1024 * 1024 * 500)) * 100, 100) : 0; // Progression basée sur la taille (max 500MB = 100%)
-    items.push({
-      id: 'temp',
-      name: 'Fichiers temporaires',
-      description: 'Fichiers %temp%, cache navigateur, logs temporaires',
-      size: tempStats.size || 0,
-      fileCount: tempStats.fileCount || 0,
-      type: 'temp',
-      progress: tempProgress,
-      path: tempPath
-    });
-    
-    // 2. Corbeille (macOS)
-    if (process.platform === 'darwin') {
-      try {
-        // Sur macOS, la corbeille nécessite des permissions spéciales
-        items.push({
-          id: 'trash',
-          name: 'Corbeille',
-          description: 'Nécessite des permissions "Accès complet au disque" dans Préférences Système > Sécurité',
-          size: 0,
-          fileCount: 0,
-          type: 'trash',
-          progress: 0,
-          path: path.join(os.homedir(), '.Trash'),
-          requiresPermissions: true
-        });
-      } catch (error) {
-        console.error('Error scanning trash:', error);
-        items.push({
-          id: 'trash',
-          name: 'Corbeille',
-          description: 'Impossible d\'accéder à la corbeille - permissions requises',
-          size: 0,
-          fileCount: 0,
-          type: 'trash',
-          progress: 0,
-          path: path.join(os.homedir(), '.Trash'),
-          requiresPermissions: true
-        });
-      }
-    }
-    
-    // 3. Anciens téléchargements
-    const downloadsPath = path.join(os.homedir(), 'Downloads');
-    const oldDownloads = await findOldFiles(downloadsPath, 30); // 30 jours
-    const downloadsProgress = oldDownloads.size > 0 ? Math.min((oldDownloads.size / (1024 * 1024 * 100)) * 100, 100) : 0; // Progression basée sur la taille (max 100MB = 100%)
-    items.push({
-      id: 'old-downloads',
-      name: 'Anciens téléchargements',
-      description: 'Fichiers téléchargés il y a plus de 30 jours',
-      size: oldDownloads.size || 0,
-      fileCount: oldDownloads.fileCount || 0,
-      type: 'old-downloads',
-      progress: downloadsProgress,
-      path: downloadsPath
-    });
-    
-    return items;
-  } catch (error) {
-    console.error('Error scanning cleanup items:', error);
-    // Retourner des données mock en cas d'erreur
-    return [
-      {
-        id: 'temp',
-        name: 'Fichiers temporaires',
-        description: 'Fichiers %temp%, cache navigateur, logs temporaires',
-        size: 2469396480,
-        fileCount: 4567,
-        type: 'temp',
-        progress: Math.min((2469396480 / (1024 * 1024 * 500)) * 100, 100) // Progression basée sur la taille
-      },
-      {
-        id: 'trash',
-        name: 'Corbeille',
-        description: 'Fichiers supprimés mais non définitivement effacés',
-        size: 897581056,
-        fileCount: 234,
-        type: 'trash',
-        progress: Math.min((897581056 / (1024 * 1024 * 50)) * 100, 100) // Progression basée sur la taille
-      }
-    ];
-  }
-});
+    const settings = await getSettings();
+    const permanentDelete = settings.permanentDeletePermission;
 
-// Nouvelle fonction pour obtenir les détails d'un élément de nettoyage
-ipcMain.handle('get-cleanup-item-details', async (event, itemId) => {
-  const fs = require('fs').promises;
-  const os = require('os');
-  
-  try {
-    // Recreate the cleanup items to find the one we need
-    const items = [];
-    
-    if (itemId === 'temp') {
-      const tempPath = os.tmpdir();
-      items.push({ id: 'temp', path: tempPath });
-    } else if (itemId === 'trash') {
-      const trashPath = path.join(os.homedir(), '.Trash');
-      items.push({ id: 'trash', path: trashPath });
-    } else if (itemId === 'old-downloads') {
-      const downloadsPath = path.join(os.homedir(), 'Downloads');
-      items.push({ id: 'old-downloads', path: downloadsPath });
-    }
-    
-    const item = items.find(i => i.id === itemId);
-    
-    if (!item || !item.path) {
-      return { files: [], totalFiles: 0 };
-    }
-    
-    const files = [];
-    
-    async function scanPath(dirPath, maxFiles = 50) {
-      try {
-        const entries = await fs.readdir(dirPath, { withFileTypes: true });
-        
-        for (const entry of entries) {
-          if (files.length >= maxFiles) break;
-          
-          const fullPath = path.join(dirPath, entry.name);
-          
-          if (entry.isFile()) {
-            try {
-              const stats = await fs.stat(fullPath);
-              
-              // Pour old-downloads, vérifier l'âge
-              if (itemId === 'old-downloads') {
-                const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
-                if (stats.mtime >= thirtyDaysAgo) continue;
-              }
-              
-              files.push({
-                name: entry.name,
-                path: fullPath,
-                size: stats.size,
-                modified: stats.mtime
-              });
-            } catch (err) {
-              // Ignorer les fichiers inaccessibles
-            }
-          } else if (entry.isDirectory() && files.length < maxFiles && itemId !== 'old-downloads') {
-            await scanPath(fullPath, maxFiles - files.length);
-          }
-        }
-      } catch (err) {
-        // Ignorer les dossiers inaccessibles
-      }
-    }
-    
-    await scanPath(item.path);
-    
-    return {
-      files: files.slice(0, 50), // Limiter à 50 fichiers pour l'affichage
-      totalFiles: files.length
-    };
-    
-  } catch (error) {
-    console.error('Error getting cleanup item details:', error);
-    return { files: [], totalFiles: 0 };
-  }
-});
-
-ipcMain.handle('cleanup-files', async (event, selectedItems) => {
-  const fs = require('fs').promises;
-  
-  let totalItems = selectedItems.length;
-  let processedItems = 0;
-  
-  try {
-    for (const item of selectedItems) {
-      console.log(`Cleaning up ${item.name}...`);
-      
-      // Envoyer la progression au début de chaque élément
-      event.sender.send('cleanup-progress', (processedItems / totalItems) * 100);
-      
-      if (item.id === 'trash') {
-        // Vider la corbeille
-        if (process.platform === 'darwin') {
-          // Utiliser AppleScript pour vider la corbeille sur macOS
-          const { exec } = require('child_process');
-          await new Promise((resolve, reject) => {
-            exec('osascript -e "tell application \\"Finder\\" to empty the trash"', (error, stdout, stderr) => {
-              if (error) {
-                console.error('Error emptying trash:', error);
-                reject(error);
-              } else {
-                console.log('Trash emptied successfully');
-                resolve();
-              }
-            });
-          });
-        } else if (process.platform === 'win32') {
-          // Windows - vider la corbeille
-          const { exec } = require('child_process');
-          await new Promise((resolve, reject) => {
-            exec('PowerShell.exe -Command "Clear-RecycleBin -Force"', (error) => {
-              if (error) reject(error);
-              else resolve();
-            });
-          });
-        }
-      } else if (item.id === 'temp') {
-        // Nettoyer les fichiers temporaires
-        const tempPath = require('os').tmpdir();
-        await cleanTempDirectory(tempPath, (itemProgress) => {
-          const globalProgress = ((processedItems + (itemProgress / 100)) / totalItems) * 100;
-          event.sender.send('cleanup-progress', globalProgress);
-        });
-      } else if (item.id === 'old-downloads') {
-        // Supprimer les anciens téléchargements
-        const downloadsPath = path.join(require('os').homedir(), 'Downloads');
-        await cleanOldDownloads(downloadsPath, 30, (itemProgress) => {
-          const globalProgress = ((processedItems + (itemProgress / 100)) / totalItems) * 100;
-          event.sender.send('cleanup-progress', globalProgress);
-        });
-      }
-      
-      processedItems++;
-      // Envoyer la progression finale pour cet élément
-      event.sender.send('cleanup-progress', (processedItems / totalItems) * 100);
-    }
-    
-    // Progression complète
-    event.sender.send('cleanup-progress', 100);
-    
-    return {
-      success: true,
-      freedSpace: selectedItems.reduce((sum, item) => sum + item.size, 0),
-      cleanedFiles: selectedItems.reduce((sum, item) => sum + item.fileCount, 0)
-    };
-    
-  } catch (error) {
-    console.error('Cleanup failed:', error);
-    return {
-      success: false,
-      error: error.message
-    };
-  }
-});
-
-// Fonctions utilitaires pour le scan de nettoyage
-async function scanDirectory(dirPath, options = {}) {
-  const fs = require('fs').promises;
-  let totalSize = 0;
-  let fileCount = 0;
-  const { maxDepth = 5 } = options;
-  
-  async function scan(currentPath, depth = 0) {
-    if (depth > maxDepth) return;
-    
-    try {
-      const entries = await fs.readdir(currentPath, { withFileTypes: true });
-      
-      for (const entry of entries) {
-        try {
-          const fullPath = path.join(currentPath, entry.name);
-          
-          if (entry.isFile()) {
-            const stats = await fs.stat(fullPath);
-            totalSize += stats.size;
-            fileCount++;
-          } else if (entry.isDirectory() && depth < maxDepth) {
-            await scan(fullPath, depth + 1);
-          }
-        } catch (err) {
-          // Ignorer les fichiers/dossiers inaccessibles
-        }
-      }
-    } catch (err) {
-      // Ignorer les erreurs d'accès au dossier
-    }
-  }
-  
-  await scan(dirPath);
-  return { size: totalSize, fileCount };
-}
-
-async function findOldFiles(dirPath, daysOld) {
-  const fs = require('fs').promises;
-  const cutoffDate = Date.now() - (daysOld * 24 * 60 * 60 * 1000);
-  let totalSize = 0;
-  let fileCount = 0;
-  
-  try {
-    const entries = await fs.readdir(dirPath, { withFileTypes: true });
-    
-    for (const entry of entries) {
-      try {
-        if (entry.isFile()) {
-          const fullPath = path.join(dirPath, entry.name);
-          const stats = await fs.stat(fullPath);
-          
-          if (stats.mtime < cutoffDate) {
-            totalSize += stats.size;
-            fileCount++;
-          }
-        }
-      } catch (err) {
-        // Ignorer les erreurs
-      }
-    }
-  } catch (err) {
-    // Ignorer les erreurs d'accès au dossier
-  }
-  
-  return { size: totalSize, fileCount };
-}
-async function emptyDirectory(dirPath, progressCallback) {
-  const fs = require('fs').promises;
-  let processedCount = 0;
-  
-  try {
-    const entries = await fs.readdir(dirPath, { withFileTypes: true });
-    const totalEntries = entries.length;
-    
-    for (const entry of entries) {
-      try {
-        const fullPath = path.join(dirPath, entry.name);
-        
-        if (entry.isDirectory()) {
-          await fs.rmdir(fullPath, { recursive: true });
+    for (const filePath of filePaths) {
+      if (permanentDelete) {
+        // Suppression permanente
+        const stats = await fs.stat(filePath);
+        if (stats.isDirectory()) {
+          await fs.rm(filePath, { recursive: true, force: true });
         } else {
-          await fs.unlink(fullPath);
+          await fs.unlink(filePath);
         }
-        
-        processedCount++;
-        if (progressCallback) {
-          progressCallback(processedCount / totalEntries * 100);
-        }
-      } catch (err) {
-        console.warn(`Could not delete ${entry.name}:`, err.message);
+      } else {
+        // Déplacer vers la corbeille
+        await shell.trashItem(filePath);
       }
     }
+    return { success: true, movedCount: filePaths.length };
   } catch (error) {
-    console.error('Error emptying directory:', error);
+    console.error('Failed to process items:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Chemin du fichier de configuration des paramètres
+const settingsFilePath = path.join(app.getPath('userData'), 'settings.json');
+
+// Fonction pour lire les paramètres
+async function getSettings() {
+  try {
+    const data = await fs.readFile(settingsFilePath, 'utf8');
+    return JSON.parse(data);
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      // Fichier non trouvé, retourner les paramètres par défaut
+      return { permanentDeletePermission: false };
+    }
+    console.error('Failed to read settings file:', error);
+    return { permanentDeletePermission: false };
   }
 }
 
-async function cleanTempDirectory(tempPath, progressCallback) {
-  const fs = require('fs').promises;
-  
+// Fonction pour écrire les paramètres
+async function saveSettings(settings) {
   try {
-    const entries = await fs.readdir(tempPath, { withFileTypes: true });
-    let processedCount = 0;
-    
-    for (const entry of entries) {
-      try {
-        const fullPath = path.join(tempPath, entry.name);
-        const stats = await fs.stat(fullPath);
-        
-        // Supprimer les fichiers/dossiers de plus de 24h
-        const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
-        if (stats.mtime < oneDayAgo) {
-          if (entry.isDirectory()) {
-            await fs.rmdir(fullPath, { recursive: true });
-          } else {
-            await fs.unlink(fullPath);
-          }
-        }
-        
-        processedCount++;
-        if (progressCallback) {
-          progressCallback(processedCount / entries.length * 100);
-        }
-      } catch (err) {
-        // Ignorer les erreurs pour les fichiers en cours d'utilisation
-      }
-    }
+    await fs.writeFile(settingsFilePath, JSON.stringify(settings, null, 2), 'utf8');
   } catch (error) {
-    console.error('Error cleaning temp directory:', error);
+    console.error('Failed to write settings file:', error);
   }
 }
 
-async function cleanOldDownloads(downloadsPath, daysOld, progressCallback) {
-  const fs = require('fs').promises;
-  
-  try {
-    const entries = await fs.readdir(downloadsPath, { withFileTypes: true });
-    const cutoffDate = Date.now() - (daysOld * 24 * 60 * 60 * 1000);
-    let processedCount = 0;
-    
-    for (const entry of entries) {
-      try {
-        if (entry.isFile()) {
-          const fullPath = path.join(downloadsPath, entry.name);
-          const stats = await fs.stat(fullPath);
-          
-          if (stats.mtime < cutoffDate) {
-            await fs.unlink(fullPath);
-          }
-        }
-        
-        processedCount++;
-        if (progressCallback) {
-          progressCallback(processedCount / entries.length * 100);
-        }
-      } catch (err) {
-        // Ignorer les erreurs
-      }
-    }
-  } catch (error) {
-    console.error('Error cleaning old downloads:', error);
-  }
-}
+// IPC pour obtenir la permission de suppression permanente
+ipcMain.handle('get-permanent-delete-permission', async () => {
+  const settings = await getSettings();
+  return settings.permanentDeletePermission;
+});
+
+// IPC pour définir la permission de suppression permanente
+ipcMain.handle('set-permanent-delete-permission', async (event, enabled) => {
+  const settings = await getSettings();
+  settings.permanentDeletePermission = enabled;
+  await saveSettings(settings);
+  return true;
+});
 
 ipcMain.handle('relaunch-as-admin', async () => {
   const { exec } = require('child_process');
@@ -860,8 +524,9 @@ ipcMain.handle('relaunch-as-admin', async () => {
 
     } else if (process.platform === 'darwin') {
       // Sur macOS, on utilise osascript pour demander les privilèges.
-      // La syntaxe `quoted form of` est essentielle pour gérer les espaces dans les chemins.
-      const command = `do shell script "open -a \"${appPath}\"" with administrator privileges`;
+      // Échapper correctement le chemin pour éviter les problèmes avec les caractères spéciaux
+      const escapedPath = appPath.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/'/g, "\\'");
+      const command = `do shell script "open -a '${escapedPath}'" with administrator privileges`;
       exec(`osascript -e '${command}'`, (error) => {
         if (error) throw error;
         app.quit();

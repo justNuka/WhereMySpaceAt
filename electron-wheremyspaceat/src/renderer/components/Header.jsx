@@ -1,8 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Search, Play, Settings, Shield, ShieldCheck } from "lucide-react";
 
 export default function Header({ onNewScan, isScanning }) {
+  const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
+  const [canDeletePermanently, setCanDeletePermanently] = useState(false);
   const [adminStatus, setAdminStatus] = useState({ isAdmin: false, platform: 'unknown' });
 
   useEffect(() => {
@@ -18,7 +22,19 @@ export default function Header({ onNewScan, isScanning }) {
       }
     };
     
+    const loadPermanentDeleteSetting = async () => {
+      if (window.electronAPI) {
+        try {
+          const setting = await window.electronAPI.getPermanentDeletePermission();
+          setCanDeletePermanently(setting);
+        } catch (error) {
+          console.error('Failed to load permanent delete setting:', error);
+        }
+      }
+    };
+
     checkAdmin();
+    loadPermanentDeleteSetting();
   }, []);
 
   const handleRelaunchAsAdmin = async () => {
@@ -42,6 +58,17 @@ export default function Header({ onNewScan, isScanning }) {
         return 'Relancer avec sudo';
       default:
         return 'Privilèges élevés';
+    }
+  };
+
+  const handlePermanentDeleteChange = async (checked) => {
+    setCanDeletePermanently(checked);
+    if (window.electronAPI) {
+      try {
+        await window.electronAPI.setPermanentDeletePermission(checked);
+      } catch (error) {
+        console.error('Failed to set permanent delete permission:', error);
+      }
     }
   };
 
@@ -94,11 +121,33 @@ export default function Header({ onNewScan, isScanning }) {
             variant="ghost"
             size="sm"
             className="glass-card text-white hover:bg-white/20"
+            onClick={() => setIsSettingsDialogOpen(true)}
           >
             <Settings className="w-4 h-4" />
           </Button>
         </div>
       </div>
+      <Dialog
+        isOpen={isSettingsDialogOpen}
+        onClose={() => setIsSettingsDialogOpen(false)}
+        title="Paramètres"
+      >
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="permanent-delete"
+            checked={canDeletePermanently}
+            onCheckedChange={handlePermanentDeleteChange}
+          />
+          <label htmlFor="permanent-delete" className="text-sm font-medium text-white leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+            Activer la suppression permanente (contourne la corbeille)
+          </label>
+        </div>
+        {!adminStatus.isAdmin && (
+          <p className="text-sm text-yellow-400 mt-4">
+            Pour supprimer des fichiers système ou des dossiers protégés, l'application doit être relancée avec des privilèges élevés.
+          </p>
+        )}
+      </Dialog>
     </header>
   );
 }

@@ -121,6 +121,38 @@ export const useScan = () => {
     return Date.now() - scanStartTime;
   }, [scanStartTime]);
 
+  const removeFilesFromScanData = useCallback((pathsToRemove) => {
+    if (!scanData) return;
+
+    const pathsSet = new Set(pathsToRemove);
+
+    const cleanNode = (node) => {
+      if (!node) return null;
+
+      // Si le noeud lui-même doit être supprimé
+      if (pathsSet.has(node.path)) {
+        return null;
+      }
+
+      // Si le noeud a des enfants, on les filtre
+      if (node.children) {
+        node.children = node.children.map(cleanNode).filter(Boolean);
+      }
+
+      // Recalculer la taille du dossier après la suppression des enfants
+      if (node.type === 'directory') {
+        node.size = node.children.reduce((sum, child) => sum + child.size, 0);
+        node.fileCount = node.children.reduce((sum, child) => sum + (child.fileCount || (child.type === 'file' ? 1 : 0)), 0);
+      }
+
+      return node;
+    };
+
+    const newScanData = cleanNode(JSON.parse(JSON.stringify(scanData))); // Deep copy to avoid state mutation issues
+    setScanData(newScanData);
+
+  }, [scanData]);
+
   return {
     scanData,
     isScanning,
@@ -134,6 +166,7 @@ export const useScan = () => {
     startScan,
     stopScan,
     resetScan,
-    getElapsedTime
+    getElapsedTime,
+    removeFilesFromScanData, // Exposer la nouvelle fonction
   };
 };

@@ -19,9 +19,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   relaunchAsAdmin: () => ipcRenderer.invoke('relaunch-as-admin'),
   
   // Fonctions de nettoyage
-  scanCleanupItems: () => ipcRenderer.invoke('scan-cleanup-items'),
-  getCleanupItemDetails: (itemId) => ipcRenderer.invoke('get-cleanup-item-details', itemId),
-  cleanupFiles: (selectedItems) => ipcRenderer.invoke('cleanup-files', selectedItems),
+  moveToTrash: (filePaths) => ipcRenderer.invoke('move-to-trash', filePaths),
+  
+  // Gestion des permissions de suppression permanente
+  getPermanentDeletePermission: () => ipcRenderer.invoke('get-permanent-delete-permission'),
+  setPermanentDeletePermission: (enabled) => ipcRenderer.invoke('set-permanent-delete-permission', enabled),
   
   // Event listeners pour les mises à jour en temps réel
   onScanProgress: (callback) => {
@@ -29,11 +31,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   onScanLog: (callback) => {
     ipcRenderer.on('scan-log', (event, data) => callback(data));
-  },
-  onCleanupProgress: (callback) => {
-    ipcRenderer.on('cleanup-progress', (event, progress) => callback(progress));
-    // Retourner une fonction pour nettoyer l'écouteur
-    return () => ipcRenderer.removeAllListeners('cleanup-progress');
   },
   
   // Nettoyage des listeners
@@ -44,7 +41,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
       // Nettoyer tous les listeners si aucun channel spécifié
       ipcRenderer.removeAllListeners('scan-progress');
       ipcRenderer.removeAllListeners('scan-log');
-      ipcRenderer.removeAllListeners('cleanup-progress');
     }
   },
 

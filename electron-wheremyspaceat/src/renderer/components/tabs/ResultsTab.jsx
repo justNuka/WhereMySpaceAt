@@ -1,8 +1,9 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatSize, formatFileCount, formatDuration } from '@/lib/formatUtils.js';
-import { BarChart3, FileText, Clock, FolderOpen, CheckCircle, Copy, FileSearch } from "lucide-react";
+import { BarChart3, FileText, Clock, FolderOpen, CheckCircle, Copy, FileSearch, Calendar, Trash2, ExternalLink } from "lucide-react";
 import StatsCard from '@/components/StatsCard.jsx';
+import { useMemo } from 'react';
 
 export default function ResultsTab({ scanData, scanStats }) {
   if (!scanData || !scanStats) {
@@ -17,25 +18,69 @@ export default function ResultsTab({ scanData, scanStats }) {
     );
   }
 
-  // Get largest items from scan data
-  const getLargestItems = (item, maxItems = 10) => {
+  const { largestItems, oldestFiles, fileTypeDistribution } = useMemo(() => {
+    const allFiles = [];
     const allItems = [];
-    
-    const collectItems = (current) => {
-      allItems.push(current);
-      if (current.children) {
-        current.children.forEach(collectItems);
+
+    const collectItems = (node) => {
+      if (!node) return;
+      allItems.push(node);
+      if (node.type === 'file') {
+        allFiles.push(node);
+      }
+      if (node.children) {
+        node.children.forEach(collectItems);
       }
     };
-    
-    collectItems(item);
-    
-    return allItems
+
+    collectItems(scanData);
+
+    const largest = allItems
       .sort((a, b) => b.size - a.size)
-      .slice(0, maxItems);
+      .slice(0, 10);
+
+    const oldest = allFiles
+      .sort((a, b) => new Date(a.modified) - new Date(b.modified))
+      .slice(0, 10);
+
+    const typeDistribution = {};
+    allFiles.forEach(file => {
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'unknown';
+      let type = 'Autres';
+      if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff', 'webp', 'svg'].includes(ext)) type = 'Images';
+      else if (['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv'].includes(ext)) type = 'Vidéos';
+      else if (['doc', 'docx', 'pdf', 'txt', 'odt', 'rtf'].includes(ext)) type = 'Documents';
+      else if (['mp3', 'wav', 'flac', 'aac'].includes(ext)) type = 'Audio';
+      else if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) type = 'Archives';
+      else if (['exe', 'msi', 'app', 'dmg'].includes(ext)) type = 'Applications';
+
+      if (!typeDistribution[type]) {
+        typeDistribution[type] = { size: 0, count: 0 };
+      }
+      typeDistribution[type].size += file.size;
+      typeDistribution[type].count++;
+    });
+
+    return { largestItems: largest, oldestFiles: oldest, fileTypeDistribution: typeDistribution };
+  }, [scanData]);
+
+  const handleOpenInFolder = (filePath) => {
+    if (window.electronAPI) {
+      window.electronAPI.showItemInFolder(filePath);
+    }
   };
 
-  const largestItems = getLargestItems(scanData);
+  const handleMoveToTrash = async (filePath) => {
+    if (window.electronAPI) {
+      const result = await window.electronAPI.moveToTrash([filePath]);
+      if (result.success) {
+        // TODO: Refresh scanData or remove item from view
+        console.log(`Moved ${filePath} to trash.`);
+      } else {
+        console.error(`Failed to move ${filePath} to trash:`, result.error);
+      }
+    }
+  };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-8">
@@ -82,8 +127,8 @@ export default function ResultsTab({ scanData, scanStats }) {
           <CardContent className="p-6">
             <h3 className="text-xl font-semibold text-white mb-6">Éléments les plus volumineux</h3>
             <div className="space-y-4">
-              {largestItems.map((item, index) => (
-                <Card key={`${item.path}-${index}`} className="glass-card border-white/10 hover:bg-white/10 transition-all cursor-pointer">
+              {largestItems.length > 0 ? largestItems.map((item, index) => (
+                <Card key={`${item.path}-${index}`} className="glass-card border-white/10 hover:bg-white/10 transition-all">
                   <CardContent className="p-4">
                     <div className="flex items-start space-x-4">
                       <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
@@ -104,60 +149,79 @@ export default function ResultsTab({ scanData, scanStats }) {
                         {item.type === 'directory' && item.fileCount && (
                           <p className="text-sm text-gray-400">{formatFileCount(item.fileCount)}</p>
                         )}
+                        <div className="flex space-x-2 mt-2">
+                          <Button size="sm" variant="ghost" onClick={() => handleOpenInFolder(item.path)} title="Ouvrir dans le dossier">
+                            <ExternalLink className="w-4 h-4 text-gray-400" />
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => handleMoveToTrash(item.path)} title="Déplacer vers la corbeille">
+                            <Trash2 className="w-4 h-4 text-red-400" />
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   </CardContent>
                 </Card>
-              ))}
+              )) : (
+                <p className="text-gray-400">Aucun élément volumineux trouvé.</p>
+              )}
             </div>
           </CardContent>
         </Card>
       </div>
       
-      {/* Quick Actions */}
+      {/* Right Column: File Type Distribution & Oldest Files */}
       <div className="space-y-6">
+        {/* File Type Distribution */}
         <Card className="glass-card border-white/10">
           <CardContent className="p-6">
-            <h3 className="text-lg font-semibold text-white mb-4">Actions rapides</h3>
+            <h3 className="text-xl font-semibold text-white mb-6">Répartition par type de fichier</h3>
             <div className="space-y-3">
-              <Button 
-                variant="ghost" 
-                className="w-full glass-card text-left hover:bg-white/20 p-4 h-auto"
-              >
-                <div className="flex items-center space-x-3">
-                  <CheckCircle className="w-5 h-5 text-green-400" />
-                  <div>
-                    <p className="text-white font-medium">Nettoyer les fichiers temporaires</p>
-                    <p className="text-sm text-gray-400">Libérer de l'espace disque</p>
-                  </div>
+              {Object.entries(fileTypeDistribution).length > 0 ? Object.entries(fileTypeDistribution).sort(([, a], [, b]) => b.size - a.size).map(([type, data]) => (
+                <div key={type} className="flex justify-between items-center">
+                  <span className="text-white font-medium">{type} ({data.count} fichiers)</span>
+                  <span className="text-gray-300">{formatSize(data.size)}</span>
                 </div>
-              </Button>
-              
-              <Button 
-                variant="ghost" 
-                className="w-full glass-card text-left hover:bg-white/20 p-4 h-auto"
-              >
-                <div className="flex items-center space-x-3">
-                  <FileSearch className="w-5 h-5 text-blue-400" />
-                  <div>
-                    <p className="text-white font-medium">Analyser les doublons</p>
-                    <p className="text-sm text-gray-400">Détecter les fichiers dupliqués</p>
-                  </div>
-                </div>
-              </Button>
-              
-              <Button 
-                variant="ghost" 
-                className="w-full glass-card text-left hover:bg-white/20 p-4 h-auto"
-              >
-                <div className="flex items-center space-x-3">
-                  <Copy className="w-5 h-5 text-purple-400" />
-                  <div>
-                    <p className="text-white font-medium">Exporter le rapport</p>
-                    <p className="text-sm text-gray-400">Sauvegarder les résultats</p>
-                  </div>
-                </div>
-              </Button>
+              )) : (
+                <p className="text-gray-400">Aucune répartition par type de fichier disponible.</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Oldest Files */}
+        <Card className="glass-card border-white/10">
+          <CardContent className="p-6">
+            <h3 className="text-xl font-semibold text-white mb-6">Fichiers les plus anciens</h3>
+            <div className="space-y-4">
+              {oldestFiles.length > 0 ? oldestFiles.map((file, index) => (
+                <Card key={`${file.path}-${index}`} className="glass-card border-white/10 hover:bg-white/10 transition-all">
+                  <CardContent className="p-4">
+                    <div className="flex items-start space-x-4">
+                      <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 bg-purple-500/20">
+                        <Calendar className="w-5 h-5 text-purple-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-white font-medium break-words">{file.name}</h4>
+                        <p className="text-sm text-gray-400 break-all">{file.path}</p>
+                      </div>
+                      <div className="text-right flex-shrink-0 ml-4">
+                        <p className="text-white font-semibold">{new Date(file.modified).toLocaleDateString()}</p>
+                        <p className="text-sm text-gray-400">{formatSize(file.size)}</p>
+                        <div className="flex space-x-2 mt-2">
+                          <Button size="sm" variant="ghost" onClick={() => handleOpenInFolder(file.path)} title="Ouvrir dans le dossier">
+                            <ExternalLink className="w-4 h-4 text-gray-400" />
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => handleMoveToTrash(file.path)} title="Déplacer vers la corbeille">
+                            <Trash2 className="w-4 h-4 text-red-400" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )) : (
+                <p className="text-gray-400">Aucun fichier ancien trouvé.</p>
+              )}
             </div>
           </CardContent>
         </Card>

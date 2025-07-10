@@ -21,7 +21,8 @@ function App() {
     startScan,
     stopScan,
     resetScan,
-    getElapsedTime
+    getElapsedTime,
+    removeFilesFromScanData
   } = useScan();
 
   // Auto-switch to results tab when scan completes
@@ -69,7 +70,7 @@ function App() {
           />
         );
       case 'clean':
-        return <CleanTab />;
+        return <CleanTab scanData={scanData} onFilesCleaned={removeFilesFromScanData} />;
       default:
         return null;
     }
