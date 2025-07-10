@@ -1,14 +1,13 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Search, BarChart3, FileText, Trash2, Activity } from "lucide-react";
+import { Search, BarChart3, FileText, Trash2, PieChart } from "lucide-react";
 
 export default function TabNavigation({ activeTab, onTabChange, scanData }) {
   const tabs = [
     { id: 'scanner', label: 'Scanner', icon: Search },
     { id: 'results', label: 'Résultats', icon: BarChart3 },
-    { id: 'details', label: 'Détails', icon: FileText },
+    { id: 'details', label: 'Détails & Visualisation', icon: PieChart },
     { id: 'clean', label: 'Nettoyer', icon: Trash2 },
-    { id: 'visual', label: 'Visualiser', icon: Activity }
   ];
 
   const getTabStatus = (tabId) => {

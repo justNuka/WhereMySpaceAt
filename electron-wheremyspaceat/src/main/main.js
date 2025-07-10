@@ -842,70 +842,50 @@ async function cleanOldDownloads(downloadsPath, daysOld, progressCallback) {
   }
 }
 
-// Handler pour relancer avec les droits admin
 ipcMain.handle('relaunch-as-admin', async () => {
+  const { exec } = require('child_process');
+  const appPath = app.getPath('exe');
+
   try {
     if (process.platform === 'win32') {
-      // Windows - utiliser PowerShell pour relancer avec UAC
-      const { spawn } = require('child_process');
-      const appPath = process.execPath;
-      
-      // Utiliser PowerShell Start-Process avec -Verb RunAs pour déclencher UAC
-      spawn('powershell', [
-        'Start-Process',
-        `"${appPath}"`,
-        '-Verb',
-        'RunAs'
-      ], {
-        detached: true,
-        stdio: 'ignore'
+      // Sur Windows, la méthode la plus fiable est d'utiliser une commande PowerShell
+      // qui encapsule l'appel à Start-Process. L'argument -ArgumentList permet de gérer
+      // correctement les chemins avec des espaces.
+      const command = `Start-Process -FilePath "${appPath}" -Verb RunAs`;
+      exec(`powershell -Command "${command}"`, (error) => {
+        if (error) throw error;
+        app.quit(); // Quitte l'application actuelle seulement si la nouvelle a pu se lancer
       });
-      
-      // Fermer l'instance actuelle
-      app.quit();
       return { success: true };
+
     } else if (process.platform === 'darwin') {
-      // macOS - utiliser osascript pour demander l'authentification admin
-      const { spawn } = require('child_process');
-      const appPath = process.execPath;
-      
-      spawn('osascript', [
-        '-e',
-        `do shell script "${appPath}" with administrator privileges`
-      ], {
-        detached: true,
-        stdio: 'ignore'
+      // Sur macOS, on utilise osascript pour demander les privilèges.
+      // La syntaxe `quoted form of` est essentielle pour gérer les espaces dans les chemins.
+      const command = `do shell script "open -a \"${appPath}\"" with administrator privileges`;
+      exec(`osascript -e '${command}'`, (error) => {
+        if (error) throw error;
+        app.quit();
       });
-      
-      app.quit();
       return { success: true };
+
     } else {
-      // Linux - utiliser sudo/pkexec
-      const { spawn } = require('child_process');
-      const appPath = process.execPath;
-      
-      // Essayer avec pkexec d'abord, puis sudo
-      try {
-        spawn('pkexec', [appPath], {
-          detached: true,
-          stdio: 'ignore'
-        });
-      } catch (e) {
-        spawn('sudo', [appPath], {
-          detached: true,
-          stdio: 'ignore'
-        });
-      }
-      
-      app.quit();
+      // Pour Linux, pkexec est la méthode moderne préférée à sudo.
+      exec(`pkexec "${appPath}"`, (error) => {
+        if (error) {
+          // Si pkexec échoue, tenter avec gksudo ou kdesudo (plus anciens)
+          exec(`gksudo "${appPath}" || kdesudo "${appPath}"`, (err) => {
+            if (err) throw err;
+            app.quit();
+          });
+        } else {
+          app.quit();
+        }
+      });
       return { success: true };
     }
   } catch (error) {
     console.error('Failed to relaunch as admin:', error);
-    return { 
-      success: false, 
-      error: error.message 
-    };
+    return { success: false, error: error.message };
   }
 });
 

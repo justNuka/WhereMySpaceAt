@@ -1,141 +1,114 @@
-import React from 'react';
-import {
-  Chart as ChartJS,
-  ArcElement,
-  Tooltip,
-  Legend
-} from 'chart.js';
-import { Doughnut } from 'react-chartjs-2';
+import React, { useState } from 'react';
+import { formatSize } from '@/lib/formatUtils.js';
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
 
-// Register Chart.js components
-ChartJS.register(ArcElement, Tooltip, Legend);
+// Fonction pour générer une couleur basée sur le nom du fichier
+const generateColor = (name) => {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
+  const color = "00000".substring(0, 6 - c.length) + c;
+  return `#${color}`;
+};
 
-// Utilisation des fonctions globales
-const formatSize = window.formatSize;
+const TreemapNode = ({ node, totalSize, onNodeClick }) => {
+  if (!node || node.size === 0) return null;
 
-// Couleurs pour le graphique
-const CHART_COLORS = [
-  'rgba(59, 130, 246, 0.8)',   // blue
-  'rgba(16, 185, 129, 0.8)',   // green
-  'rgba(245, 158, 11, 0.8)',   // yellow
-  'rgba(239, 68, 68, 0.8)',    // red
-  'rgba(139, 92, 246, 0.8)',   // purple
-  'rgba(236, 72, 153, 0.8)',   // pink
-  'rgba(14, 165, 233, 0.8)',   // sky
-  'rgba(34, 197, 94, 0.8)',    // emerald
-  'rgba(251, 146, 60, 0.8)',   // orange
-  'rgba(168, 85, 247, 0.8)'    // violet
-];
+  const percentage = (node.size / totalSize) * 100;
+  const color = generateColor(node.name);
 
-const SpaceChart = ({ data }) => {
-  if (!data) {
+  // Ne pas afficher les enfants si le noeud est trop petit
+  if (percentage < 0.1) {
     return (
-      <div className="glass-morphism-dark rounded-2xl p-6 border border-white/10">
-        <h2 className="text-xl font-semibold text-white mb-4">Distribution de l'Espace</h2>
-        <div className="h-64 flex items-center justify-center">
-          <p className="text-gray-400">Aucune donnée à afficher</p>
+      <div
+        className="treemap-cell border border-gray-700/50 overflow-hidden"
+        style={{ backgroundColor: color, opacity: 0.5 }}
+        title={`${node.name} (${formatSize(node.size)}) - Trop petit pour afficher les détails`}
+      />
+    );
+  }
+
+  // Si le noeud n'a pas d'enfants, c'est une feuille
+  if (!node.children || node.children.length === 0) {
+    return (
+      <div
+        className="treemap-cell border border-gray-800/80 flex items-center justify-center p-1 overflow-hidden cursor-pointer hover:border-white"
+        style={{ backgroundColor: `${color}BF` }} // 75% opacity
+        onClick={() => onNodeClick(node)}
+        title={`${node.name} (${formatSize(node.size)})`}
+      >
+        <div className="text-center text-white text-xs font-medium break-words">
+          {node.name}
+          <br />
+          <span className="text-gray-300">{formatSize(node.size)}</span>
         </div>
       </div>
     );
   }
 
-  // Prepare data for chart (top 10 largest items)
-  const items = [];
-  
-  const collectItems = (item) => {
-    items.push({
-      name: item.name,
-      size: item.size,
-      type: item.type
-    });
-    
-    if (item.children) {
-      item.children.forEach(collectItems);
-    }
-  };
-  
-  if (data.children) {
-    data.children.forEach(collectItems);
-  }
-  
-  // Sort by size and take top 10
-  const topItems = items
-    .sort((a, b) => b.size - a.size)
-    .slice(0, 10);
-  
-  const labels = topItems.map(item => {
-    const name = item.name.length > 20 ? item.name.substring(0, 20) + '...' : item.name;
-    return `${name} (${formatSize(item.size)})`;
-  });
-  
-  const sizes = topItems.map(item => item.size);
-  const colors = CHART_COLORS.slice(0, topItems.length);
-  
-  const chartData = {
-    labels: labels,
-    datasets: [{
-      data: sizes,
-      backgroundColor: colors,
-      borderColor: colors.map(color => color.replace('0.8', '1')),
-      borderWidth: 2,
-      hoverBorderWidth: 3
-    }]
-  };
-  
-  const chartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        position: 'bottom',
-        labels: {
-          color: '#D1D5DB',
-          font: {
-            size: 12
-          },
-          usePointStyle: true,
-          padding: 15
-        }
-      },
-      tooltip: {
-        backgroundColor: 'rgba(0, 0, 0, 0.8)',
-        titleColor: '#FFFFFF',
-        bodyColor: '#D1D5DB',
-        borderColor: 'rgba(255, 255, 255, 0.2)',
-        borderWidth: 1,
-        callbacks: {
-          label: function(context) {
-            const item = topItems[context.dataIndex];
-            const percentage = ((item.size / data.size) * 100).toFixed(1);
-            return `${formatSize(item.size)} (${percentage}%)`;
-          }
-        }
-      }
-    },
-    elements: {
-      arc: {
-        borderWidth: 2
-      }
-    }
-  };
+  // C'est un conteneur, on affiche ses enfants
+  // On trie les enfants par taille pour la disposition
+  const sortedChildren = [...node.children].sort((a, b) => b.size - a.size);
+  const totalChildrenSize = sortedChildren.reduce((sum, child) => sum + child.size, 0);
+
+  // Détermine si la disposition doit être en ligne ou en colonne
+  const isHorizontal = window.innerWidth > window.innerHeight;
 
   return (
-    <div className="glass-morphism-dark rounded-2xl p-6 border border-white/10">
-      <h2 className="text-xl font-semibold text-white mb-4">Distribution de l'Espace</h2>
-      <div className="h-64 relative">
-        <Doughnut data={chartData} options={chartOptions} />
-      </div>
-      
-      <div className="mt-4 glass-morphism border border-white/20 rounded-lg p-3">
-        <div className="text-center">
-          <p className="text-2xl font-bold text-blue-400">
-            {formatSize(data.size)}
-          </p>
-          <p className="text-sm text-gray-300">Taille Totale</p>
+    <div className={`treemap-node flex ${isHorizontal ? 'flex-row' : 'flex-col'}`}>
+      {sortedChildren.map((child, index) => (
+        <div
+          key={index}
+          style={{ flex: child.size }}
+          className="flex"
+        >
+          <TreemapNode node={child} totalSize={totalChildrenSize} onNodeClick={onNodeClick} />
         </div>
-      </div>
+      ))}
     </div>
   );
 };
 
-export default SpaceChart;
+export default function SpaceChart({ data }) {
+  const [history, setHistory] = useState([data]);
+  const currentData = history[history.length - 1];
+
+  const handleNodeClick = (node) => {
+    if (node.children && node.children.length > 0) {
+      setHistory([...history, node]);
+    }
+  };
+
+  const handleGoBack = () => {
+    if (history.length > 1) {
+      setHistory(history.slice(0, -1));
+    }
+  };
+
+  if (!data) return null;
+
+  return (
+    <Card className="glass-card border-white/10 h-[600px] flex flex-col">
+      <CardContent className="p-4 flex-1 flex flex-col">
+        <div className="flex items-center mb-4">
+          {history.length > 1 && (
+            <Button onClick={handleGoBack} variant="ghost" size="sm" className="text-white hover:bg-white/20 mr-4">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Retour
+            </Button>
+          )}
+          <div className="text-gray-300 font-mono text-sm truncate">
+            {currentData.path}
+          </div>
+        </div>
+        <div className="flex-1 w-full h-full bg-gray-900/50 rounded-lg overflow-hidden">
+          <TreemapNode node={currentData} totalSize={currentData.size} onNodeClick={handleNodeClick} />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}

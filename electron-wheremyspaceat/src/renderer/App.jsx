@@ -6,7 +6,6 @@ import ScannerTab from '@/components/tabs/ScannerTab.jsx';
 import ResultsTab from '@/components/tabs/ResultsTab.jsx';
 import DetailsTab from '@/components/tabs/DetailsTab.jsx';
 import CleanTab from '@/components/tabs/CleanTab.jsx';
-import VisualTab from '@/components/tabs/VisualTab.jsx';
 
 function App() {
   const [activeTab, setActiveTab] = useState('scanner');
@@ -71,12 +70,6 @@ function App() {
         );
       case 'clean':
         return <CleanTab />;
-      case 'visual':
-        return (
-          <VisualTab
-            scanData={scanData}
-          />
-        );
       default:
         return null;
     }

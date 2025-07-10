@@ -71,6 +71,19 @@ class DirectoryScanner {
   }
 
   async scanDirectory(dirPath, depth = 0) {
+    // Optimisation: ignorer les dossiers protégés par macOS pour éviter les erreurs de permission massives
+    if (depth > 0 && this.isMacOSProtectedPath(dirPath)) {
+      this.ignoredDirs.push(dirPath);
+      // Loggue une seule fois que le dossier est ignoré au lieu de générer des milliers d'erreurs
+      parentPort.postMessage({
+        type: 'log',
+        level: 'info',
+        message: `🛡️ Dossier protégé ignoré: ${path.basename(dirPath)}`,
+        timestamp: new Date().toISOString()
+      });
+      return null; // Retourne null pour qu'il soit filtré et ne soit pas ajouté à l'arbre
+    }
+
     const item = {
       name: path.basename(dirPath) || dirPath,
       path: dirPath,
@@ -81,10 +94,9 @@ class DirectoryScanner {
       depth
     };
 
+    let entries;
     try {
-      const entries = await fs.readdir(dirPath, { withFileTypes: true });
-      
-      // Log seulement pour les dossiers de niveau racine et quelques niveaux profonds
+      entries = await fs.readdir(dirPath, { withFileTypes: true });
       if (depth <= 2) {
         parentPort.postMessage({
           type: 'log',
@@ -93,113 +105,87 @@ class DirectoryScanner {
           timestamp: new Date().toISOString()
         });
       }
-      
-      for (const entry of entries) {
-        const fullPath = path.join(dirPath, entry.name);
-        
-        try {
-          if (entry.isDirectory()) {
-            const childDir = await this.scanDirectory(fullPath, depth + 1);
-            item.children.push(childDir);
-            item.size += childDir.size;
-            item.fileCount += childDir.fileCount;
-            this.totalDirectories++;
-          } else if (entry.isFile()) {
-            const stats = await fs.stat(fullPath);
-            const fileItem = {
-              name: entry.name,
-              path: fullPath,
-              type: 'file',
-              size: stats.size,
-              modified: stats.mtime,
-              depth: depth + 1
-            };
-            
-            item.children.push(fileItem);
-            item.size += stats.size;
-            item.fileCount += 1;
-            this.totalFiles++;
-          }
-          
-          this.processedFiles++;
-          
-          // Amélioration du système de progression
-          const now = Date.now();
-          const shouldUpdateProgress = (this.processedFiles % 50 === 0) || (now - this.lastProgressUpdate > this.progressUpdateInterval);
-          
-          if (shouldUpdateProgress) {
-            // Estimation adaptative basée sur la vitesse de scan
-            const elapsed = now - this.startTime;
-            const scanRate = this.processedFiles / (elapsed / 1000);
-            
-            // Estimation plus sophistiquée
-            if (this.estimatedTotal === 0 || this.processedFiles > this.estimatedTotal * 0.8) {
-              // Mise à jour de l'estimation basée sur la vitesse actuelle
-              this.estimatedTotal = Math.max(this.estimatedTotal, this.processedFiles * 1.5);
-            }
-            
-            // Calcul du progrès avec une courbe logarithmique pour plus de réalisme
-            let progress;
-            if (this.estimatedTotal > 0) {
-              const rawProgress = (this.processedFiles / this.estimatedTotal) * 100;
-              // Courbe logarithmique pour ralentir la progression vers la fin
-              progress = Math.min(95, rawProgress * (1 - Math.exp(-rawProgress / 30)));
-            } else {
-              progress = Math.min(95, (this.processedFiles / 1000) * 100);
-            }
-            
-            parentPort.postMessage({
-              type: 'progress',
-              progress: progress,
-              processed: this.processedFiles,
-              currentFile: fullPath,
-              scanRate: Math.round(scanRate),
-              estimatedTotal: this.estimatedTotal,
-              timestamp: new Date().toISOString()
-            });
-            
-            this.lastProgressUpdate = now;
-            
-            // Log seulement lors des jalons importants
-            if (this.processedFiles % 1000 === 0) {
-              parentPort.postMessage({
-                type: 'log',
-                level: 'info',
-                message: `${this.processedFiles} fichiers traités...`,
-                timestamp: new Date().toISOString()
-              });
-            }
-          }
-          
-        } catch (error) {
-          this.errors.push({
-            path: fullPath,
-            error: error.message,
-            code: error.code,
-            entryName: entry.name
-          });
-          
-          // Gestion spécifique des erreurs selon la plateforme
-          this.handlePermissionError(error, fullPath, entry.name);
-        }
-      }
-      
-      // Sort children by size (descending)
-      item.children.sort((a, b) => b.size - a.size);
-      
     } catch (error) {
-      this.errors.push({
-        path: dirPath,
-        error: error.message,
-        code: error.code,
-        isDirectory: true
-      });
-      
-      // Gestion des erreurs de dossier
+      this.errors.push({ path: dirPath, error: error.message, code: error.code, isDirectory: true });
       this.handleDirectoryError(error, dirPath);
+      return item; // Retourne un item vide en cas d'erreur pour ne pas crasher le parent
+    }
+
+    const promises = entries.map(async (entry) => {
+      const fullPath = path.join(dirPath, entry.name);
+      try {
+        if (entry.isDirectory()) {
+          return await this.scanDirectory(fullPath, depth + 1);
+        }
+        if (entry.isFile()) {
+          const stats = await fs.stat(fullPath);
+          return { name: entry.name, path: fullPath, type: 'file', size: stats.size, modified: stats.mtime, depth: depth + 1 };
+        }
+      } catch (error) {
+        this.errors.push({ path: fullPath, error: error.message, code: error.code, entryName: entry.name });
+        this.handlePermissionError(error, fullPath, entry.name);
+        return null;
+      }
+    });
+
+    const results = (await Promise.all(promises)).filter(r => r);
+
+    for (const result of results) {
+      item.children.push(result);
+      item.size += result.size;
+      if (result.type === 'directory') {
+        this.totalDirectories++;
+        item.fileCount += result.fileCount || 0;
+      } else {
+        this.totalFiles++;
+        item.fileCount++;
+      }
+    }
+    
+    this.processedFiles += entries.length;
+    this.updateProgress(dirPath);
+
+    item.children.sort((a, b) => b.size - a.size);
+
+    // Optimisation: "élagage" de l'arbre pour éviter les crashs de mémoire
+    // Ne conserve que les 100 enfants les plus volumineux, ce qui est suffisant pour l'analyse
+    if (item.children.length > 100) {
+      item.children = item.children.slice(0, 100);
     }
 
     return item;
+  }
+
+  updateProgress(currentPath) {
+    const now = Date.now();
+    if (now - this.lastProgressUpdate > this.progressUpdateInterval) {
+      const elapsed = now - this.startTime;
+      const scanRate = this.processedFiles / (elapsed / 1000);
+
+      this.estimatedTotal = Math.max(this.estimatedTotal, this.processedFiles * 1.5);
+      let progress = Math.min(95, (this.processedFiles / this.estimatedTotal) * 100);
+
+      parentPort.postMessage({
+        type: 'progress',
+        progress: progress,
+        processed: this.processedFiles,
+        currentFile: currentPath,
+        scanRate: Math.round(scanRate),
+        estimatedTotal: this.estimatedTotal,
+        timestamp: new Date().toISOString()
+      });
+
+      this.lastProgressUpdate = now;
+
+      if (this.processedFiles % 1000 === 0) {
+        parentPort.postMessage({
+          type: 'log',
+          level: 'info',
+          message: `${this.processedFiles} fichiers traités...`,
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
   }
 
   handlePermissionError(error, fullPath, entryName) {
