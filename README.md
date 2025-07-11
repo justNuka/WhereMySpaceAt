@@ -1,7 +1,7 @@
 # 🚀 WhereMySpaceAt
 
 <div align="center">
-  <img src="public/icon.png" alt="WhereMySpaceAt Logo" width="128" height="128">
+  <img src="electron-wheremyspaceat/public/icon.png" alt="WhereMySpaceAt Logo" width="128" height="128">
   
   **Analyseur d'espace disque moderne et intuitif**
   
