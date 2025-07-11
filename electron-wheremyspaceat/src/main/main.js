@@ -512,19 +512,14 @@ ipcMain.handle('relaunch-as-admin', async () => {
 
   try {
     if (process.platform === 'win32') {
-      // Sur Windows, la méthode la plus fiable est d'utiliser une commande PowerShell
-      // qui encapsule l'appel à Start-Process. L'argument -ArgumentList permet de gérer
-      // correctement les chemins avec des espaces.
       const command = `Start-Process -FilePath "${appPath}" -Verb RunAs`;
       exec(`powershell -Command "${command}"`, (error) => {
         if (error) throw error;
-        app.quit(); // Quitte l'application actuelle seulement si la nouvelle a pu se lancer
+        app.quit();
       });
       return { success: true };
 
     } else if (process.platform === 'darwin') {
-      // Sur macOS, on utilise osascript pour demander les privilèges.
-      // Échapper correctement le chemin pour éviter les problèmes avec les caractères spéciaux
       const escapedPath = appPath.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/'/g, "\\'");
       const command = `do shell script "open -a '${escapedPath}'" with administrator privileges`;
       exec(`osascript -e '${command}'`, (error) => {

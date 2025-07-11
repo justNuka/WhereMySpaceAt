@@ -189,3 +189,30 @@ button {
     transform: translateY(0);
   }
 }
+
+/* Treemap optimizations */
+.treemap-node {
+  contain: layout style;
+  will-change: transform;
+}
+
+.treemap-cell {
+  contain: layout style;
+  will-change: transform;
+  transition: border-color 0.2s ease;
+}
+
+.treemap-cell:hover {
+  z-index: 1;
+  position: relative;
+}
+
+/* Performance optimizations */
+.tree-item {
+  contain: layout style;
+}
+
+.tree-toggle {
+  contain: layout style;
+  will-change: transform;
+}
