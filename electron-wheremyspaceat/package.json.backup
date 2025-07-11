@@ -32,7 +32,7 @@
     "package-simple": "npm run build:renderer && electron-packager . WhereMySpaceAt --platform=darwin --arch=x64 --out=out --overwrite --icon=assets/icons/icon.icns --extra-resource=workers",
     "package-mac": "npm run build:renderer && electron-packager . WhereMySpaceAt --platform=darwin --arch=x64,arm64 --out=out --overwrite --icon=assets/icons/icon.icns --extra-resource=workers",
     "package-win": "npm run build:renderer && electron-packager . WhereMySpaceAt --platform=win32 --arch=x64,ia32 --out=out --overwrite --extra-resource=workers",
-    "package-win-full": "npm run build:renderer && npx electron-packager . WhereMySpaceAt --platform=win32 --arch=x64,ia32 --out=out --overwrite --icon=assets/icons/icon.ico --extra-resource=workers --asar --app-bundle-id=com.wheremyspaceat.app --app-version=1.0.0 --win32metadata.CompanyName=WhereMySpaceAt --win32metadata.FileDescription=\"Disk Space Analyzer\" --win32metadata.ProductName=WhereMySpaceAt",
+    "package-win-full": "npm run build:renderer && electron-packager . WhereMySpaceAt --platform=win32 --arch=x64,ia32 --out=out --overwrite --icon=assets/icons/icon.ico --extra-resource=workers",
     "package-linux": "npm run build:renderer && electron-packager . WhereMySpaceAt --platform=linux --arch=x64 --out=out --overwrite --icon=assets/icons/icon.png --extra-resource=workers",
     "package-all": "npm run build:renderer && electron-packager . WhereMySpaceAt --platform=darwin,win32,linux --arch=x64 --out=out --overwrite --extra-resource=workers"
   },

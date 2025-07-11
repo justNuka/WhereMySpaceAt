@@ -11,6 +11,7 @@ function App() {
   const [activeTab, setActiveTab] = useState('scanner');
   const {
     scanData,
+    setScanData,
     isScanning,
     progress,
     logs,
@@ -61,6 +62,7 @@ function App() {
           <ResultsTab
             scanData={scanData}
             scanStats={scanStats}
+            setScanData={setScanData}
           />
         );
       case 'details':

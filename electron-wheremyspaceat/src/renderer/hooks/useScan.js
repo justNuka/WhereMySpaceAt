@@ -155,6 +155,7 @@ export const useScan = () => {
 
   return {
     scanData,
+    setScanData,
     isScanning,
     progress,
     logs,
